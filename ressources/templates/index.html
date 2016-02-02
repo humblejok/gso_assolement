@@ -1,0 +1,517 @@
+<!DOCTYPE html>
+
+<html lang="en">
+
+	<head>
+
+		<title>Assolement</title>
+		<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+		<script src="https://code.jquery.com/jquery-2.2.0.min.js"></script>
+		<script src="https://code.jquery.com/ui/1.12.0-beta.1/jquery-ui.min.js"></script>
+		<link rel="stylesheet" href="https://code.jquery.com/ui/1.12.0-beta.1/themes/smoothness/jquery-ui.css"/>
+		<!-- Latest compiled and minified CSS -->
+		<link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.6/css/bootstrap.min.css" integrity="sha384-1q8mTJOASx8j1Au+a5WDVnPi2lkFfwwEAa8hDDdjZlpLegxhjVME1fgjWPGmkzs7" crossorigin="anonymous"/>
+
+		<!-- Optional theme -->
+		<link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.6/css/bootstrap-theme.min.css" integrity="sha384-fLW2N01lMqjakBkx3l/M9EahuwpSfeNvV63J5ezn3uZzapT0u7EYsXMjQV+0En5r" crossorigin="anonymous"/>
+
+		<!-- Latest compiled and minified JavaScript -->
+		<script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.6/js/bootstrap.min.js" integrity="sha384-0mSbJDEHialfmuBBQP6A4Qrprq5OVfW37PRR3j5ELqxss1yVqOtnepnHVP9aJ7xS" crossorigin="anonymous"></script>
+
+		<link rel="stylesheet" href="/static/gammasimos.css"/>
+		<script src="/static/gammasimos.js"></script>
+
+		<script>
+			var descriptions = {'type_sol': {'fields': ['id', 'numero', 'nom'], 'visible_fields': ['id', 'numero', 'nom'],
+											 'ajax': '/create_update.html',
+											 'target_class': 'assolement.models.TypeSol',
+											 'selects_to_populate': ['culture_sols_interdits', 'culture_sols_deconseilles', 'culture_sols_conseilles','parcelle_type_de_sol']
+											},
+								'localisation_sol': {'fields': ['id', 'code', 'nom'], 'visible_fields': ['id', 'code', 'nom'],
+													 'ajax': '/create_update.html',
+													 'target_class': 'assolement.models.LocalisationSol',
+													 'selects_to_populate': ['parcelle_localisation']
+													 },
+								'culture': {'fields': ['id', 'nom', 'surface', 'pourcentage', 'tolerance',
+													   'precedents_interdits', 'precedents_deconseilles', 'precedents_conseilles',
+													    'annees_retour', 'duree_culture',
+													    'sols_interdits', 'sols_deconseilles', 'sols_conseilles'],
+											'visible_fields': ['id', 'nom', 'surface', 'pourcentage', 'tolerance'],
+											'ajax': '/create_update.html',
+											'target_class': 'assolement.models.Culture',
+											'selects_to_populate': ['culture_precedents_interdits', 'culture_precedents_deconseilles', 'culture_precedents_conseilles']
+											},
+								'parcelle': {'fields': ['id', 'nom', 'surface', 'type_de_sol', 'localisation'], 'visible_fields': ['id', 'nom', 'surface', 'type_de_sol', 'localisation'],
+													 'ajax': '/create_update.html',
+													 'target_class': 'assolement.models.Parcelle',
+													 'selects_to_populate': []
+											 },
+								};
+			var cultures = {{cultures|safe}};
+			var localisation_sols = {{localisations_sol|safe}};
+			var type_sols = {{types_sol|safe}};
+			var parcelles = {{parcelles|safe}};
+
+			var start_year = new Date().getFullYear() - 4;
+			var visbile_years = 8;
+
+			$(document).ready(function () {
+				csrftoken = getCookie('csrftoken');
+				$('.with-id tr > *:first-child').hide();
+				$.each(descriptions, function(key, information){
+					refreshTable(key);
+				});
+				buildHistoryTable();
+			});
+
+			function buildHistoryTable(start_year) {
+				var working_year = new Date().getFullYear() - 4;
+				if (start_year) {
+					console.log(working_year);
+					working_year = start_year;
+				}
+				var cultures_options = "<option value='JACHERE'>-</option>";
+				$.each(cultures, function(index, culture){
+					cultures_options += "<option value='" + culture.id + "'>" + culture.nom + "</option>"
+				});
+				$("#historique_table").empty();
+				var html_append;
+				html_append = "<tr><th class='col-lg-1'>Parcelle</th>";
+				for (var index=working_year;index<working_year + visbile_years; index++) {
+					html_append +="<th>" + index +"</th>";
+				}
+				html_append +="</tr>";
+				$("#historique_table").append(html_append);
+
+				$.each(parcelles, function(index, parcelle){
+					html_append = "<tr class='parcelle-" + parcelle.id + "'><td>" + parcelle.nom + "</td>";
+					for (var rolling_year=working_year;rolling_year<working_year + visbile_years; rolling_year++) {
+						html_append +="<td><select id='parcelle-" + parcelle.id + "-" + rolling_year + "' class='form-control parcelle-history'>" + cultures_options + "</select></th>";
+					}
+					html_append += "</tr>";
+					$("#historique_table").append(html_append);
+				});
+
+				$.each(parcelles, function(index, parcelle){
+					for (var rolling_year=working_year;rolling_year<working_year + visbile_years; rolling_year++) {
+						var not_found = true;
+						$.each(parcelle.historique, function(sub_index, annee){
+							if (annee.annee==rolling_year) {
+								not_found = false;
+								console.log("#parcelle-" + parcelle.id + "-" + rolling_year, annee);
+								$("#parcelle-" + parcelle.id + "-" + rolling_year).val(annee.culture);
+							}
+						});
+						if (not_found) {
+							$("#parcelle-" + parcelle.id + "-" + rolling_year).val("JACHERE");
+						}
+					}
+				});
+			}
+
+			function historySaved(event) {
+				console.log(event);
+				parcelles = event.updated_values;
+				buildHistoryTable();
+			}
+
+			function saveHistory() {
+				var all_history = {};
+				$(".parcelle-history").each(function(){
+					var culture_id = -1;
+					if ($(this).val()!=="JACHERE") {
+						culture_id = Number($(this).val());
+					}
+					all_history[$(this).attr("id")] = culture_id;
+				});
+				var historyForm = new FormData();
+				historyForm.set("history", JSON.stringify(all_history));
+				$.ajax({
+					url: '/update_history.html',
+					type: 'POST',
+					data: historyForm,
+					contentType: false,
+					processData: false,
+					success: historySaved,
+					error: onCallError
+				});
+			}
+
+			function refreshTable(prefix) {
+				$("." + prefix + "_row").remove();
+				$.each(window[prefix + "s"], function(index, value){
+					appendRow(prefix, value);
+				});
+
+				$.each(descriptions[prefix].selects_to_populate, function(index, select_id){
+					$("#" + select_id).empty();
+					$.each(window[prefix + "s"], function(index, value){
+						$("#" + select_id).append("<option value='" + value.id + "'>" + value.nom + "</option>")
+					});
+				});
+			}
+
+			function onCallError(event) {
+				alert(event);
+				console.log(event);
+			}
+
+			function dataRemoved(event) {
+				if (event.success) {
+					var new_list = [];
+					$.each(window[event.prefix + "s"], function(index, value){
+						if (value.id!==event.value.id) {
+							new_list.push(value);
+						}
+					});
+					window[event.prefix + "s"] = new_list;
+					refreshTable(event.prefix);
+					
+				} else {
+					alert("Impossible de supprimer l'élément!");
+				}
+			}
+
+			function appendRow(prefix, data) {
+				var html_row = '<tr id="' + prefix + '_row_' + data.id +'" class="' + prefix + '_row">';
+				$.each(descriptions[prefix].visible_fields, function(index, field) {
+					html_row += '<td id="' + prefix + '_' + field + '_' + data.id + '">' + (typeof data[field]=='string' || typeof data[field]=='number'?data[field]:data[field].nom) + '</td>';
+				});
+				html_row += '<td><button type="button" class="btn btn-default btn-sm" aria-label="Supprimer" onclick="removeRow(\'' + prefix + '\',' + data.id + ')"><span class="glyphicon glyphicon-remove" aria-hidden="true"></span></button><button type="button" class="btn btn-default btn-sm" aria-label="Editer" onclick="editRow(\'' + prefix + '\',' + data.id + ')"><span class="glyphicon glyphicon-pencil" aria-hidden="true"></span></button></td>';
+				html_row += '</tr>';
+				$("#" + prefix + "_table").append(html_row);
+				$('.with-id tr > *:first-child').hide();
+			}
+
+			function dataSaved(event) {
+				console.log(event);
+				$("#" + event.prefix + "_modal").modal('hide');
+				if (event.update) {
+					var new_list = [];
+					$.each(window[event.prefix + "s"], function(index, value){
+						if (value.id!==event.value.id) {
+							new_list.push(value);
+						} else {
+							new_list.push(event.value);
+						}
+					});
+					window[event.prefix + "s"] = new_list;
+					refreshTable(event.prefix);
+				} else {
+					window[event.prefix + "s"].push(event.value);
+					refreshTable(event.prefix);
+				}
+			}
+
+			function editRow(prefix, id) {
+				var data = {};
+				$.each(window[prefix + "s"], function(index, value) {
+					console.log(value.id, id);
+					if (value.id===id) {
+						data = value;
+					}
+				});
+				console.log(prefix, data);
+				showModal(prefix, data);
+			}
+
+			function removeRow(prefix, id) {
+				var removeForm = new FormData();
+				removeForm.set("target_class", descriptions[prefix].target_class);
+				removeForm.set("prefix", prefix);
+				removeForm.set("id", id);
+				$.ajax({
+					url: '/remove.html',
+					type: 'POST',
+					data: removeForm,
+					contentType: false,
+					processData: false,
+					success: dataRemoved,
+					error: onCallError
+				});
+			}
+
+			function submitModal(event, prefix) {
+				event.preventDefault();
+				var formValues = $("#" + prefix + "_form").serializeForm(prefix + "_");
+				formValues.set("target_class", descriptions[prefix].target_class);
+				formValues.set("prefix", prefix);
+				$.ajax({
+					url: descriptions[prefix].ajax,
+					type: 'POST',
+					data: formValues,
+					contentType: false,
+					processData: false,
+					success: dataSaved,
+					error: onCallError
+				});
+			}
+
+			function showModal(prefix, data) {
+				if (data) {
+					console.log(data);
+					$.each(descriptions[prefix].fields, function(index, value) {
+						if ($("#" + prefix + "_" + value).is("input")) {
+							$("#" + prefix + "_" + value).val(data[value]);
+						} else if (!$("#" + prefix + "_" + value + "[multiple]").length) {
+							$("#" + prefix + "_" + value).val(data[value].id);
+						} else {
+							$("#" + prefix + "_" + value + " option:selected").removeAttr("selected");
+							$.each(data[value], function(selected_index, selected_value) {
+								$("#" + prefix + "_" + value + " option[value='" + selected_value.id + "']").prop("selected", true);
+							});
+						}
+					});
+				} else {
+					$("#" + prefix + "_id").val('');
+				}
+				$("#" + prefix + "_modal").modal('show');
+			}
+		</script>
+	</head>
+	<body>
+		<div class="container" style="padding: 0 15px;">
+			<div class="row">
+				<!-- MENU -->
+				<ul class="nav nav-tabs">
+					<li role="presentation" class="active"><a data-toggle="tab" href="#accueil">Accueil</a></li>
+					<li role="presentation"><a data-toggle="tab" href="#historique">Historique</a></li>
+					<li role="presentation"><a data-toggle="tab" href="#parcelles">Parcelles</a></li>
+					<li role="presentation"><a data-toggle="tab" href="#cultures">Cultures</a></li>
+					<li role="presentation"><a data-toggle="tab" href="#types_sol">Types de sol</a></li>
+					<li role="presentation"><a data-toggle="tab" href="#localisations_sols">Localisation des sols</a></li>
+				</ul>
+				<!-- MENU CONTENT-->
+				<div class="tab-content">
+					<div id="accueil" class="tab-pane fade in active">
+						ACCUEIL
+					</div>
+					<div id="historique" class="tab-pane fade">
+						<p>
+							<br/>
+							<button type="button" class="btn btn-default" aria-label="Sauvegarder les modifications" onclick="saveHistory('parcelle')"><span class="glyphicon glyphicon-save" aria-hidden="true"></span>&nbsp;Sauvegarder l'historique</button>
+						</p>
+						<table id="historique_table" class="table table-striped table-condensed">
+						</table>
+					</div>
+					<div id="parcelles" class="tab-pane fade">
+						<p>
+							<br/>
+							<button type="button" class="btn btn-default" aria-label="Créer une parcelle" onclick="showModal('parcelle')"><span class="glyphicon glyphicon-plus" aria-hidden="true"></span>&nbsp;Ajouter une parcelle</button>
+						</p>
+						<table id="parcelle_table" class="table table-striped table-condensed with-id">
+							<tr><th>Id</th><th class="col-lg-2">Nom</th><th class="col-lg-1">Surface</th><th class="col-lg-1">Type de sol</th><th class="col-lg-1">Localisation</th><th class="col-lg-2">Actions</th></tr>
+						</table>
+					</div>
+					<div id="cultures" class="tab-pane fade">
+						<p>
+							<br/>
+							<button type="button" class="btn btn-default" aria-label="Créer un type de culture" onclick="showModal('culture')"><span class="glyphicon glyphicon-plus" aria-hidden="true"></span>&nbsp;Ajouter un type de culture</button>
+						</p>
+						<table id="culture_table" class="table table-striped table-condensed with-id">
+							<tr><th>Id</th><th class="col-lg-2">Nom</th><th class="col-lg-1">Surface</th><th class="col-lg-1">Pourcentage</th><th class="col-lg-1">Tolérance</th><th class="col-lg-2">&nbsp;Actions</th></tr>
+						</table>
+					</div>
+					<div id="types_sol" class="tab-pane fade">
+						<p>
+							<br/>
+							<button type="button" class="btn btn-default" aria-label="Créer un type de sol" onclick="showModal('type_sol')"><span class="glyphicon glyphicon-plus" aria-hidden="true"></span>&nbsp;Ajouter un type de sol</button>
+						</p>
+						<table id="type_sol_table" class="table table-striped table-condensed with-id">
+							<tr><th>Id</th><th class="col-lg-2">Numéro</th><th class="col-lg-8">Nom</th><th class="col-lg-2">Actions</th></tr>
+						</table>
+					</div>
+					<div id="localisations_sols" class="tab-pane fade">
+						<p>
+							<br/>
+							<button type="button" class="btn btn-default" aria-label="Créer une localisation de sol" onclick="showModal('localisation_sol')"><span class="glyphicon glyphicon-plus" aria-hidden="true"></span>&nbsp;Ajouter une localisation de sol</button>
+						</p>
+						<table id="localisation_sol_table" class="table table-striped table-condensed with-id">
+							<tr><th>Id</th><th class="col-lg-2">Code</th><th class="col-lg-8">Nom</th><th class="col-lg-2">Actions</th></tr>
+						</table>
+					</div>
+				</div>
+
+				<!-- POPUP PARCELLE -->
+				<div class="modal fade" id="parcelle_modal" tabindex="-1" role="dialog" aria-labelledby="parcelle_modal_label">
+					<div class="modal-dialog" role="document">
+						<div class="modal-content">
+							<div class="modal-header">
+								<button type="button" class="close" data-dismiss="modal" aria-label="Fermer"><span aria-hidden="true">&times;</span></button>
+								<h5 class="modal-title" id="parcelle_modal_label">Créer/éditer un type de sol</h5>
+							</div>
+							<form id="parcelle_form" onsubmit="submitModal(event, 'parcelle')" role="form" action="/create_update.html" method="POST">
+								<div class="modal-body">
+									<input type="hidden" id="parcelle_id" name="parcelle_id"></input>
+									<div class="form-group">
+										<label for="parcelle_nom">Nom de la parcelle</label>
+										<input type="text" class="form-control" id="parcelle_nom" name="parcelle_nom" placeholder="Entrer un nom pour la parcelle"></input>
+									</div>
+									<div class="form-group">
+										<label for="parcelle_surface">Surface de la parcelle</label>
+										<input type="text" class="form-control" id="parcelle_surface" name="parcelle_surface" placeholder="Entrer la surface de la parcelle"></input>
+									</div>
+									<div class="form-group">
+										<label for="parcelle_type_de_sol">Type de sol</label>
+										<select id="parcelle_type_de_sol" name="parcelle_type_de_sol" class="form-control"></select>
+									</div>
+									<div class="form-group">
+										<label for="parcelle_localisation">Localisation de la parcelle</label>
+										<select id="parcelle_localisation" name="parcelle_localisation" class="form-control"></select>
+									</div>
+								</div>
+								<div class="modal-footer">
+									<button type="button" class="btn btn-default" data-dismiss="modal">Fermer</button>
+									<button type="submit" role="button" class="btn btn-primary">Sauvegarder</button>
+								</div>
+							</form>
+						</div>
+					</div>
+				</div>
+
+				<!-- POPUP TYPE DE CULTURE -->
+				<div class="modal fade" id="culture_modal" tabindex="-1" role="dialog" aria-labelledby="culture_modal_label">
+					<div class="modal-dialog" role="document">
+						<div class="modal-content">
+							<div class="modal-header">
+								<button type="button" class="close" data-dismiss="modal" aria-label="Fermer"><span aria-hidden="true">&times;</span></button>
+								<h5 class="modal-title" id="culture_modal_label">Créer/éditer une culture</h5>
+							</div>
+							<form id="culture_form" onsubmit="submitModal(event, 'culture')" role="form" action="/create_update.html" method="POST">
+								<div class="modal-body">
+									<input type="hidden" id="culture_id" name="culture_id"></input>
+									<div class="form-group">
+										<label for="culture_nom">Nom de la culture</label>
+										<input type="text" class="form-control" id="culture_nom" name="culture_nom" placeholder="Entrer un nom de culture"></input>
+									</div>
+									<div class="form-group">
+										<label for="culture_surface">Surface</label>
+										<input type="text" class="form-control" id="culture_surface" name="culture_surface" placeholder="Entrer une surface"></input>
+									</div>
+									<div class="form-group">
+										<label for="culture_pourcentage">Pourcentage</label>
+										<input type="text" class="form-control" id="culture_pourcentage" name="culture_pourcentage" placeholder="Entrer un pourcentage"></input>
+									</div>
+									<div class="form-group">
+										<label for="culture_tolerance">Tolérance</label>
+										<input type="text" class="form-control" id="culture_tolerance" name="culture_tolerance" placeholder="Entrer une tolérance"></input>
+									</div>
+									<div class="form-group">
+										<label for="culture_annees_retour">Années avant retour</label>
+										<input type="text" class="form-control" id="culture_annees_retour" name="culture_annees_retour" placeholder="Entrer un nombre d'années avant retour"></input>
+									</div>
+									<div class="form-group">
+										<label for="culture_duree_culture">Durée de la culture</label>
+										<input type="text" class="form-control" id="culture_duree_culture" name="culture_duree_culture" placeholder="Entrer un nombre d'années avant retour"></input>
+									</div>
+									<div class="row"><h5><strong>&nbsp;Cultures précédentes (CTRL+clic pour sélection multiple)</strong></h5></div>
+									<div class="row">
+										<div class="col-lg-4">
+											<div class="form-group">
+												<label for="culture_precedents_interdits">Interdits</label>
+												<select id="culture_precedents_interdits" name="culture_precedents_interdits" multiple class="form-control"></select>
+											</div>
+										</div>
+										<div class="col-lg-4">
+											<div class="form-group">
+												<label for="culture_precedents_deconseilles">Déconseillés</label>
+												<select id="culture_precedents_deconseilles" name="culture_precedents_deconseilles" multiple class="form-control"></select>
+											</div>
+										</div>
+										<div class="col-lg-4">
+											<div class="form-group">
+												<label for="culture_precedents_conseilles">Conseillés</label>
+												<select id="culture_precedents_conseilles" name="culture_precedents_conseilles" multiple class="form-control"></select>
+											</div>
+										</div>
+									</div>
+									<div class="row"><h5><strong>&nbsp;Recommandation de sol (CTRL+clic pour sélection multiple)</strong></h5></div>
+									<div class="row">
+										<div class="col-lg-4">
+											<div class="form-group">
+												<label for="culture_sols_interdits">Interdits</label>
+												<select id="culture_sols_interdits" name="culture_sols_interdits" multiple class="form-control"></select>
+											</div>
+										</div>
+										<div class="col-lg-4">
+											<div class="form-group">
+												<label for="culture_sols_deconseilles">Déconseillés</label>
+												<select id="culture_sols_deconseilles" name="culture_sols_deconseilles" multiple class="form-control"></select>
+											</div>
+										</div>
+										<div class="col-lg-4">
+											<div class="form-group">
+												<label for="culture_sols_conseilles">Conseillés</label>
+												<select id="culture_sols_conseilles" name="culture_sols_conseilles" multiple class="form-control"></select>
+											</div>
+										</div>
+									</div>
+								</div>
+								<div class="modal-footer">
+									<button type="button" class="btn btn-default" data-dismiss="modal">Fermer</button>
+									<button type="submit" role="button" class="btn btn-primary">Sauvegarder</button>
+								</div>
+							</form>
+						</div>
+					</div>
+				</div>
+				<!-- POPUP TYPE DE SOL -->
+				<div class="modal fade" id="type_sol_modal" tabindex="-1" role="dialog" aria-labelledby="type_sol_modal_label">
+					<div class="modal-dialog" role="document">
+						<div class="modal-content">
+							<div class="modal-header">
+								<button type="button" class="close" data-dismiss="modal" aria-label="Fermer"><span aria-hidden="true">&times;</span></button>
+								<h5 class="modal-title" id="type_sol_modal_label">Créer/éditer un type de sol</h5>
+							</div>
+							<form id="type_sol_form" onsubmit="submitModal(event, 'type_sol')" role="form" action="/create_update.html" method="POST">
+								<div class="modal-body">
+									<input type="hidden" id="type_sol_id" name="type_sol_id"></input>
+									<div class="form-group">
+										<label for="type_sol_numero">Numéro du type</label>
+										<input type="text" class="form-control" id="type_sol_numero" name="type_sol_numero" placeholder="Entrer un numero pour le sol"></input>
+									</div>
+									<div class="form-group">
+										<label for="type_sol_nom">Nom du type</label>
+										<input type="text" class="form-control" id="type_sol_nom" name="type_sol_nom" placeholder="Entrer un nom pour le sol"></input>
+									</div>
+								</div>
+								<div class="modal-footer">
+									<button type="button" class="btn btn-default" data-dismiss="modal">Fermer</button>
+									<button type="submit" role="button" class="btn btn-primary">Sauvegarder</button>
+								</div>
+							</form>
+						</div>
+					</div>
+				</div>
+				<!-- POPUP LOCALISATION DE SOL -->
+				<div class="modal fade" id="localisation_sol_modal" tabindex="-1" role="dialog" aria-labelledby="localisation_sol_modal_label">
+					<div class="modal-dialog" role="document">
+						<div class="modal-content">
+							<div class="modal-header">
+								<button type="button" class="close" data-dismiss="modal" aria-label="Fermer"><span aria-hidden="true">&times;</span></button>
+								<h5 class="modal-title" id="localisation_sol_modal_label">Créer/éditer une localisation de sol</h5>
+							</div>
+							<form id="localisation_sol_form" onsubmit="submitModal(event, 'localisation_sol')" role="form" action="/create_update.html" method="POST">
+								<div class="modal-body">
+									<input type="hidden" id="localisation_sol_id" name="localisation_sol_id"></input>
+									<div class="form-group">
+										<label for="localisation_sol_code">Code de la localisation</label>
+										<input type="text" class="form-control" id="localisation_sol_code" name="localisation_sol_code" placeholder="Entrer un code pour la localisation"></input>
+									</div>
+									<div class="form-group">
+										<label for="localisation_sol_nom">Nom de la localisation</label>
+										<input type="text" class="form-control" id="localisation_sol_nom" name="localisation_sol_nom" placeholder="Entrer un nom pour la localisation"></input>
+									</div>
+								</div>
+								<div class="modal-footer">
+									<button type="button" class="btn btn-default" data-dismiss="modal">Fermer</button>
+									<button type="submit" role="button" class="btn btn-primary">Sauvegarder</button>
+								</div>
+							</form>
+						</div>
+					</div>
+				</div>
+			</div>
+		</div>
+	</body>
+</html>
