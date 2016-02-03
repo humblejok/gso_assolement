@@ -59,6 +59,7 @@ def index(request):
                'parcelles': parcelles}
     return render(request, 'index.html', context)
 
+
 def update_history(request):
     history = loads(request.POST['history'])
     for key in history:
