@@ -12,7 +12,7 @@ MANAGERS = ADMINS
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.sqlite3', # Add 'postgresql_psycopg2', 'mysql', 'sqlite3' or 'oracle'.
-        'NAME': 'f:/Development/Databases/SQLite3/assolement.db',                      # Or path to database file if using sqlite3.
+        'NAME': '/home/humblejok/Databases/sqlite/assolement.db',                      # Or path to database file if using sqlite3.
     }
 }
 
@@ -64,7 +64,7 @@ STATIC_URL = '/static/'
 
 # Additional locations of static files
 STATICFILES_DIRS = (
-   'F:/Development/Sources/gso_assolement/ressources/static',
+   'F/home/humblejok/Sources/gso_assolement/ressources/static',
 )
 
 # List of finder classes that know how to find static files in
@@ -101,7 +101,7 @@ ROOT_URLCONF = 'gso_assolement.urls'
 WSGI_APPLICATION = 'gso_assolement.wsgi.application'
 
 TEMPLATE_DIRS = (
-                'F:/Development/Sources/gso_assolement/ressources/templates',
+                '/home/humblejok/Sources/gso_assolement/ressources/templates',
     # Put strings here, like "/home/html/django_templates" or "C:/www/django/templates".
     # Always use forward slashes, even on Windows.
     # Don't forget to use absolute paths, not relative paths.
