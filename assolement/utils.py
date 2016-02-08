@@ -67,7 +67,7 @@ def compute(starting_year):
                 if starting_year in historique_cultures[culture_key][parcelle]:
                     effective_parcelle = Parcelle.objects.get(nom=parcelle)
                     current_cultures[culture_key]['remaining_surface'] -= effective_parcelle.surface
-                    current_cultures[culture_key]['parcelles'].append(effective_parcelle.nom)
+                    current_cultures[culture_key]['parcelles'].append(effective_parcelle)
                     parcelles = parcelles.exclude(id=effective_parcelle.id)
                     if current_cultures[culture_key]['remaining_surface']<=0.0:
                         cultures = cultures.exclude(id=culture.id)
@@ -79,5 +79,30 @@ def compute(starting_year):
             if -starting_year in historique_cultures[culture_key]:
                 continue
             if parcelles.filter(nom=parcelle).exists():
-                available_parcelles[culture_key].append(parcelle)
+                available_parcelles[culture_key].append(parcelles.get(nom=parcelle))
+                available_parcelles[culture_key] = sorted(available_parcelles[culture_key], key = lambda p: p.surface, reverse = True)
     print available_parcelles
+    no_solution = False
+
+    while len(cultures)>0 and not no_solution:
+        culture = cultures[0]
+        culture_key = culture.nom
+        shift = culture.surface * culture.tolerance
+        while len(current_cultures[culture_key]['parcelles'])!=0 or abs(current_cultures[culture_key]["remaining_surface"])>=shift:
+            if len(available_parcelles[culture_key])==1:
+                selected_parcelle = available_parcelles[culture_key]
+            else:
+                passed_all = True
+                for selected_parcelle in available_parcelles[culture_key]:
+                    if current_cultures[culture_key]["remaining_surface"] + shift>=selected_parcelle.surface:
+                        passed_all = False
+                        break
+            if passed_all:
+                selected_parcelle = available_parcelles[culture_key][-1]
+            for sub_culture_key in available_parcelles:
+                available_parcelles[sub_culture_key].remove(selected_parcelle)
+            current_cultures[culture_key]["parcelles"].append(selected_parcelle)
+            current_cultures[culture_key]["remaining_surface"] -= selected_parcelle.surface
+        cultures = cultures.exclude(id=culture.id)
+        print len(cultures)
+    print current_cultures
