@@ -1,4 +1,4 @@
-# Django settings for gso_ensolementsettings.py project.
+# Django settings for gso_ensolement project.
 
 DEBUG = True
 TEMPLATE_DEBUG = DEBUG

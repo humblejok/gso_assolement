@@ -87,22 +87,20 @@ def compute(starting_year):
     while len(cultures)>0 and not no_solution:
         culture = cultures[0]
         culture_key = culture.nom
-        shift = culture.surface * culture.tolerance
-        while len(current_cultures[culture_key]['parcelles'])!=0 or abs(current_cultures[culture_key]["remaining_surface"])>=shift:
-            if len(available_parcelles[culture_key])==1:
-                selected_parcelle = available_parcelles[culture_key]
-            else:
-                passed_all = True
-                for selected_parcelle in available_parcelles[culture_key]:
-                    if current_cultures[culture_key]["remaining_surface"] + shift>=selected_parcelle.surface:
-                        passed_all = False
-                        break
+        shift = culture.surface * culture.tolerance / 100.0
+        while len(available_parcelles[culture_key])!=0 and abs(current_cultures[culture_key]["remaining_surface"])>shift:
+            passed_all = True
+            for selected_parcelle in available_parcelles[culture_key]:
+                if selected_parcelle.surface + shift<=current_cultures[culture_key]["remaining_surface"] or abs(current_cultures[culture_key]["remaining_surface"] - selected_parcelle.surface)<=shift:
+                    passed_all = False
+                    break
             if passed_all:
                 selected_parcelle = available_parcelles[culture_key][-1]
             for sub_culture_key in available_parcelles:
-                available_parcelles[sub_culture_key].remove(selected_parcelle)
-            current_cultures[culture_key]["parcelles"].append(selected_parcelle)
+                if selected_parcelle in available_parcelles[sub_culture_key]:
+                    available_parcelles[sub_culture_key].remove(selected_parcelle)
             current_cultures[culture_key]["remaining_surface"] -= selected_parcelle.surface
+            current_cultures[culture_key]["parcelles"].append(selected_parcelle)
         cultures = cultures.exclude(id=culture.id)
         print len(cultures)
     print current_cultures
