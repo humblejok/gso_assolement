@@ -11,6 +11,9 @@ urlpatterns = patterns('',
     
     url(r'^update_history.html$', 'assolement.views.update_history', name='history_save'),
     
+    url(r'^compute_year.html$', 'assolement.views.compute_year', name='compute_year'),
+    
+    
     
     url(r'^admin/', include(admin.site.urls)),
 )

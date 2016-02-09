@@ -3,7 +3,7 @@ Created on 3 fevr. 2016
 
 @author: humble_jok
 '''
-from assolement.models import Culture, Parcelle
+from assolement.models import Culture, Parcelle, Annee
 from json import dumps
 def compute(starting_year):
 
@@ -83,10 +83,15 @@ def compute(starting_year):
                 available_parcelles[culture_key] = sorted(available_parcelles[culture_key], key = lambda p: p.surface, reverse = True)
     print available_parcelles
     no_solution = False
+    
+    # Ordering by number of possibilities
+    culture_keys = available_parcelles.keys()
+    culture_keys = sorted(culture_keys, key = lambda c: len(available_parcelles[c]), reverse = False)
+    
 
     while len(cultures)>0 and not no_solution:
-        culture = cultures[0]
-        culture_key = culture.nom
+        culture = cultures.get(nom=culture_keys[0])
+        culture_key = culture_keys[0]
         shift = culture.surface * culture.tolerance / 100.0
         while len(available_parcelles[culture_key])!=0 and abs(current_cultures[culture_key]["remaining_surface"])>shift:
             passed_all = True
@@ -102,5 +107,19 @@ def compute(starting_year):
             current_cultures[culture_key]["remaining_surface"] -= selected_parcelle.surface
             current_cultures[culture_key]["parcelles"].append(selected_parcelle)
         cultures = cultures.exclude(id=culture.id)
+        culture_keys.remove(culture_key)
         print len(cultures)
     print current_cultures
+    for culture_key in current_cultures:
+        information = current_cultures[culture_key]
+        for parcelle in information['parcelles']:
+            annee = Annee()
+            annee.culture = Culture.objects.get(nom=culture_key)
+            annee.annee = starting_year
+            annee.save()
+            if parcelle.historique.filter(annee=starting_year).exists():
+                old_annee = parcelle.historique.get(annee=starting_year)
+                parcelle.historique.remove(old_annee)
+                old_annee.delete()
+            parcelle.historique.add(annee)
+            parcelle.save()

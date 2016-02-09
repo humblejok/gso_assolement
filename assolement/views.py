@@ -6,6 +6,7 @@ from seq_common.utils.classes import my_class_import
 from json import dumps, loads
 from django.forms.models import model_to_dict
 import datetime
+from assolement import utils
 
 def clean_post_value(value):
     if isinstance(value, list) and len(value)==1:
@@ -59,6 +60,12 @@ def index(request):
                'parcelles': parcelles}
     return render(request, 'index.html', context)
 
+def compute_year(request):
+    year = int(clean_post_value(request.POST['year']))
+    utils.compute(year)
+    parcelles = [dict_to_json_compliance(model_to_dict(parcelle), Parcelle) for parcelle in Parcelle.objects.all().order_by('nom')]
+    json_response = {'success': True, 'updated_values': parcelles}
+    return HttpResponse(dumps(json_response),"json")
 
 def update_history(request):
     history = loads(request.POST['history'])
