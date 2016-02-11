@@ -25,7 +25,7 @@ def compute(starting_year):
                 historique_cultures[culture_key][parcelle_key] = []
             if not annee.annee in historique_cultures[culture_key][parcelle_key]:
                 if -annee.annee in historique_cultures[culture_key][parcelle_key]:
-                    historique_cultures[culture_key][parcelle_key].append(-annee.annee)
+                    historique_cultures[culture_key][parcelle_key].remove(-annee.annee)
                 historique_cultures[culture_key][parcelle_key].append(annee.annee)
             duree = int(annee.culture.duree_culture) # TODO: Clean when in prod
             retour = int(annee.culture.annees_retour)  # TODO: Clean when in prod

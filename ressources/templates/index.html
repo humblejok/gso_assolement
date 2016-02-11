@@ -62,12 +62,13 @@
 					refreshTable(key);
 				});
 				buildHistoryTable();
+				console.log(csrftoken);
 			});
 
 			function computeYear(index) {
 				$("#workingIndicator").toggleClass("invisible");
 				var computeForm = new FormData();
-				computeForm.set("year", index);
+				computeForm.append("year", index);
 				$.ajax({
 					url: '/compute_year.html',
 					type: 'POST',
@@ -125,10 +126,14 @@
 			}
 
 			function historySaved(event) {
-				console.log(event);
-				parcelles = event.updated_values;
-				buildHistoryTable();
-				$("#workingIndicator").toggleClass("invisible");
+				if (event.success) {
+					console.log(event);
+					parcelles = event.updated_values;
+					buildHistoryTable();
+					$("#workingIndicator").toggleClass("invisible");
+				} else {
+					alert(event.message);
+				}
 			}
 
 			function saveHistory() {
@@ -142,7 +147,7 @@
 					all_history[$(this).attr("id")] = culture_id;
 				});
 				var historyForm = new FormData();
-				historyForm.set("history", JSON.stringify(all_history));
+				historyForm.append("history", JSON.stringify(all_history));
 				$.ajax({
 					url: '/update_history.html',
 					type: 'POST',
@@ -168,9 +173,8 @@
 				});
 			}
 
-			function onCallError(event) {
-				alert(event);
-				console.log(event);
+			function onCallError(xhr, status, error) {
+				alert("Le serveur n'est pas dispobible, merci de réessayer ultérieurement!");
 			}
 
 			function dataRemoved(event) {
@@ -185,7 +189,7 @@
 					refreshTable(event.prefix);
 					
 				} else {
-					alert("Impossible de supprimer l'élément!");
+					alert(event.message);
 				}
 			}
 
@@ -201,22 +205,25 @@
 			}
 
 			function dataSaved(event) {
-				console.log(event);
-				$("#" + event.prefix + "_modal").modal('hide');
-				if (event.update) {
-					var new_list = [];
-					$.each(window[event.prefix + "s"], function(index, value){
-						if (value.id!==event.value.id) {
-							new_list.push(value);
-						} else {
-							new_list.push(event.value);
-						}
-					});
-					window[event.prefix + "s"] = new_list;
-					refreshTable(event.prefix);
+				if (event.success) {
+					$("#" + event.prefix + "_modal").modal('hide');
+					if (event.update) {
+						var new_list = [];
+						$.each(window[event.prefix + "s"], function(index, value){
+							if (value.id!==event.value.id) {
+								new_list.push(value);
+							} else {
+								new_list.push(event.value);
+							}
+						});
+						window[event.prefix + "s"] = new_list;
+						refreshTable(event.prefix);
+					} else {
+						window[event.prefix + "s"].push(event.value);
+						refreshTable(event.prefix);
+					}
 				} else {
-					window[event.prefix + "s"].push(event.value);
-					refreshTable(event.prefix);
+					alert(event.message);
 				}
 			}
 
@@ -234,9 +241,9 @@
 
 			function removeRow(prefix, id) {
 				var removeForm = new FormData();
-				removeForm.set("target_class", descriptions[prefix].target_class);
-				removeForm.set("prefix", prefix);
-				removeForm.set("id", id);
+				removeForm.append("target_class", descriptions[prefix].target_class);
+				removeForm.append("prefix", prefix);
+				removeForm.append("id", id);
 				$.ajax({
 					url: '/remove.html',
 					type: 'POST',
@@ -251,8 +258,8 @@
 			function submitModal(event, prefix) {
 				event.preventDefault();
 				var formValues = $("#" + prefix + "_form").serializeForm(prefix + "_");
-				formValues.set("target_class", descriptions[prefix].target_class);
-				formValues.set("prefix", prefix);
+				formValues.append("target_class", descriptions[prefix].target_class);
+				formValues.append("prefix", prefix);
 				$.ajax({
 					url: descriptions[prefix].ajax,
 					type: 'POST',
@@ -356,7 +363,7 @@
 								<button type="button" class="close" data-dismiss="modal" aria-label="Fermer"><span aria-hidden="true">&times;</span></button>
 								<h5 class="modal-title" id="parcelle_modal_label">Créer/éditer un type de sol</h5>
 							</div>
-							<form id="parcelle_form" onsubmit="submitModal(event, 'parcelle')" role="form" action="/create_update.html" method="POST">
+							<form id="parcelle_form" onsubmit="submitModal(event, 'parcelle')" role="form" action="/create_update.html" method="POST">{{csrf_token}}
 								<div class="modal-body">
 									<input type="hidden" id="parcelle_id" name="parcelle_id"></input>
 									<div class="form-group">

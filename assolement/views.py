@@ -61,73 +61,94 @@ def index(request):
     return render(request, 'index.html', context)
 
 def compute_year(request):
-    year = int(clean_post_value(request.POST['year']))
-    utils.compute(year)
-    parcelles = [dict_to_json_compliance(model_to_dict(parcelle), Parcelle) for parcelle in Parcelle.objects.all().order_by('nom')]
-    json_response = {'success': True, 'updated_values': parcelles}
+    if 'year' not in request.POST:
+        json_response = {'success': False, 'message': 'Calcul assolement: Un argument est manquant dans l''appel au serveur.'}
+    else:
+        year = int(clean_post_value(request.POST['year']))
+        utils.compute(year)
+        parcelles = [dict_to_json_compliance(model_to_dict(parcelle), Parcelle) for parcelle in Parcelle.objects.all().order_by('nom')]
+        json_response = {'success': True, 'updated_values': parcelles}
     return HttpResponse(dumps(json_response),"json")
 
 def update_history(request):
-    history = loads(request.POST['history'])
-    for key in history:
-        ids = key.split('-')
-        parcelle = Parcelle.objects.get(id=ids[1])
-        annee = parcelle.historique.filter(annee=ids[2])
-        if annee.exists():
-            annee = annee[0]
-            if history[key]==-1:
-                parcelle.historique.remoce(annee)
-                parcelle.save()
-                annee.delete()
-            else:
-                annee.culture = Culture.objects.get(id=history[key])
-        elif not annee.exists() and history[key]!=-1:
-            annee = Annee()
-            annee.annee = ids[2]
-            annee.culture = Culture.objects.get(id=history[key])
-            annee.save()
-            parcelle.historique.add(annee)
-    parcelles = [dict_to_json_compliance(model_to_dict(parcelle), Parcelle) for parcelle in Parcelle.objects.all().order_by('nom')]
-    json_response = {'success': True, 'updated_values': parcelles}
+    if 'history' not in request.POST:
+        json_response = {'success': False, 'message': 'Sauvegarde historique: Un argument est manquant dans l''appel au serveur.'}
+    else:
+        try:
+            history = loads(request.POST['history'])
+            for key in history:
+                ids = key.split('-')
+                parcelle = Parcelle.objects.get(id=ids[1])
+                annee = parcelle.historique.filter(annee=ids[2])
+                if annee.exists():
+                    annee = annee[0]
+                    if history[key]==-1:
+                        parcelle.historique.remove(annee)
+                        parcelle.save()
+                        annee.delete()
+                    else:
+                        annee.culture = Culture.objects.get(id=history[key])
+                elif not annee.exists() and history[key]!=-1:
+                    annee = Annee()
+                    annee.annee = ids[2]
+                    annee.culture = Culture.objects.get(id=history[key])
+                    annee.save()
+                    parcelle.historique.add(annee)
+            parcelles = [dict_to_json_compliance(model_to_dict(parcelle), Parcelle) for parcelle in Parcelle.objects.all().order_by('nom')]
+            json_response = {'success': True, 'updated_values': parcelles}
+        except:
+            json_response = {'success': False, 'message': 'Sauvegarde historique: La mise a jour a echoue lors de la sauvergarde en base de donnees.'}
     return HttpResponse(dumps(json_response),"json")
 
 def remove(request):
-    target_class = clean_post_value(request.POST['target_class'])
-    target_class = my_class_import(target_class)
-    prefix = clean_post_value(request.POST['prefix'])
-    entity_id = clean_post_value(request.POST['id'])
-    entity = target_class.objects.get(id=entity_id)
-    json_response = {'success': True, 'prefix': prefix, 'value': dict_to_json_compliance(model_to_dict(entity), target_class)}
-    entity.delete()
+    if 'target_class' not in request.POST or 'prefix' not in request.POST or 'id' not in request.POST:
+        json_response = {'success': False, 'message': 'Suppression: Un argument est manquant dans l''appel au serveur.'}
+    else:
+        target_class = clean_post_value(request.POST['target_class'])
+        try:
+            target_class = my_class_import(target_class)
+            prefix = clean_post_value(request.POST['prefix'])
+            entity_id = clean_post_value(request.POST['id'])
+            entity = target_class.objects.get(id=entity_id)
+            json_response = {'success': True, 'prefix': prefix, 'value': dict_to_json_compliance(model_to_dict(entity), target_class)}
+            entity.delete()
+        except:
+            json_response = {'success': False, 'message': 'Suppression: L''objet avec l''identifiant [' + entity_id + '] et le type [' + str(target_class) + '] n'' a pas ete trouve dans la base de donnees.' }
+
     return HttpResponse(dumps(json_response),"json")
 
 def create_update(request):
-    print request.POST
-    target_class = clean_post_value(request.POST['target_class'])
-    target_class = my_class_import(target_class)
-    prefix = clean_post_value(request.POST['prefix'])
-    if 'id' in request.POST and request.POST['id']!=None and request.POST['id']!='':
-        entity_id = clean_post_value(request.POST['id'])
-        entity = target_class.objects.get(id=entity_id)
-        update = True
+    if 'target_class' not in request.POST or 'prefix' not in request.POST or 'id' not in request.POST:
+        json_response = {'success': False, 'message': 'Mise a jour: Un argument est manquant dans l''appel au serveur.'}
     else:
-        entity = target_class()
-        update = False
-    for field in target_class._meta.fields:
-        if field.name in request.POST and field.name!='id':
-            if field.__class__.__name__=="ForeignKey":
-                setattr(entity, field.name, field.rel.to.objects.get(id=request.POST[field.name]))
-            elif field.__class__.__name__=="FloatField":
-                setattr(entity, field.name, float(clean_post_value(request.POST[field.name]).replace(',', '.').replace('%', '')))
+        try:
+            target_class = clean_post_value(request.POST['target_class'])
+            target_class = my_class_import(target_class)
+            prefix = clean_post_value(request.POST['prefix'])
+            if 'id' in request.POST and request.POST['id']!=None and request.POST['id']!='':
+                entity_id = clean_post_value(request.POST['id'])
+                entity = target_class.objects.get(id=entity_id)
+                update = True
             else:
-                setattr(entity, field.name, clean_post_value(request.POST[field.name]))
-    # Pre-sauvegarde pour affecter les champs M2M
-    entity.save()
-    for field in target_class._meta.many_to_many:
-        getattr(entity, field.name).clear()
-        if field.name in request.POST: 
-            for sub_id in request.POST[field.name].split(','):
-                getattr(entity, field.name).add(field.rel.to.objects.get(id=sub_id))
-    entity.save()
-    json_response = {'success': True, 'update': update, 'prefix': prefix, 'value': dict_to_json_compliance(model_to_dict(entity), target_class)}
+                entity = target_class()
+                update = False
+            for field in target_class._meta.fields:
+                if field.name in request.POST and field.name!='id':
+                    if field.__class__.__name__=="ForeignKey":
+                        setattr(entity, field.name, field.rel.to.objects.get(id=request.POST[field.name]))
+                    elif field.__class__.__name__=="FloatField":
+                        setattr(entity, field.name, float(clean_post_value(request.POST[field.name]).replace(',', '.').replace('%', '')))
+                    else:
+                        setattr(entity, field.name, clean_post_value(request.POST[field.name]))
+            # Pre-sauvegarde pour affecter les champs M2M
+            entity.save()
+            for field in target_class._meta.many_to_many:
+                getattr(entity, field.name).clear()
+                if field.name in request.POST: 
+                    for sub_id in request.POST[field.name].split(','):
+                        getattr(entity, field.name).add(field.rel.to.objects.get(id=sub_id))
+            entity.save()
+            json_response = {'success': True, 'update': update, 'prefix': prefix, 'value': dict_to_json_compliance(model_to_dict(entity), target_class)}
+        except:
+            json_response = {'success': False, 'message': 'Mise a jour: L''objet avec l''identifiant [' + entity_id + '] et le type [' + str(target_class) + '] n'' a pas ete trouve dans la base de donnees.' }
     return HttpResponse(dumps(json_response),"json")
