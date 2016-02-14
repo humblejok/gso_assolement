@@ -5,6 +5,42 @@ Created on 3 fevr. 2016
 '''
 from assolement.models import Culture, Parcelle, Annee
 from json import dumps
+from ortools.constraint_solver import pywrapcp
+
+def make_int(fl_value):
+    return int(fl_value * 1000.0)
+
+def or_compute(working_year):
+    solver = pywrapcp.Solver('Assolement ' + str(working_year))
+    authorized = {}
+    cultures = Culture.objects.filter(surface__gt=0.0)
+    for culture in cultures:
+        authorized[culture.id] = [parcelle.id for parcelle in Parcelle.objects.filter(surface__gt=0.0).exclude(type_de_sol__in=culture.sols_interdits.all())]
+    surfaces = {}
+    parcelles_ids = []
+    used = []
+    surfaces_array = []
+    for parcelle in Parcelle.objects.filter(surface__gt=0.0).order_by('nom'):
+        surfaces[parcelle.id] = solver.IntVar(0, make_int(parcelle.surface), 'Surface_%i' % parcelle.id)
+        surfaces_array.append(make_int(parcelle.surface))
+        parcelles_ids.append(parcelle.id)
+        used.append(solver.IntVar(0,1, "Parcelle_%i" % parcelle.id))
+    total_surfaces = solver.IntVar(0, sum(surfaces), 'total_surfaces')
+    solver.Add(total_surfaces == solver.ScalProd(used, surfaces_array))
+    for culture in cultures:
+        crop = solver.Sum([surfaces[p_id] for p_id in authorized[culture.id]])
+        solver.Add(crop<=make_int(culture.surface * (1.0 + (culture.tolerance / 100.0))))
+        solver.Add(crop>=make_int(culture.surface * (1.0 - (culture.tolerance / 100.0))))
+        
+    objective = solver.Maximize(total_surfaces, 1)
+    db = solver.Phase(used, solver.CHOOSE_FIRST_UNBOUND, solver.ASSIGN_MAX_VALUE)
+    solver.NewSearch(db, [objective])
+    while solver.NextSolution():
+        print "Total Surface", total_surfaces.Value()
+        for p_id in parcelles_ids:
+            if used[p_id] == 1:
+                print Parcelle.objects.get(id=p_id), used[p_id]
+    solver.EndSearch()
 def compute(starting_year):
 
     parcelles = Parcelle.objects.filter(surface__gt=0.0)
