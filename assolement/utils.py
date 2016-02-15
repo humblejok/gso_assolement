@@ -10,6 +10,37 @@ from ortools.constraint_solver import pywrapcp
 def make_int(fl_value):
     return int(fl_value * 1000.0)
 
+
+def assolement_compute(working_year):
+    solver = pywrapcp.Solver('Assolement ' + str(working_year))
+    db_parcelles = Parcelle.objects.filter(surface__gt=0.0).order_by('nom')
+    db_cultures = Culture.objects.filter(surface__gt=0.0).order_by('nom')[0:3]
+    parcelles = [parcelle.id for parcelle in db_parcelles]
+    p_surfaces = [solver.IntConst(make_int(parcelle.surface)) for parcelle in db_parcelles]
+    cultures = [culture.id for culture in db_cultures]
+    current_assolement = [0 for parcelle in db_parcelles]
+    target_assolement = [solver.IntVar(0, len(cultures), 'parcelle_%i' % i) for i in range(len(parcelles))]
+    
+    c_min_surfaces = [make_int(culture.surface * (1.0 - (culture.tolerance / 100.0))) for culture in db_cultures]
+    c_max_surfaces = [make_int(culture.surface * (1.0 + (culture.tolerance / 100.0))) for culture in db_cultures]
+    
+    # PRE ASSIGNED aka LUZERNE
+    for i in range(len(parcelles)):
+        if current_assolement[i]:
+            solver.Add(target_assolement[i] == current_assolement[i])
+    for i in range(len(cultures)):
+        c_surface = solver.IntVar(c_min_surfaces[i], c_max_surfaces[i], 'c_surface')
+        t_surface = solver.Sum([p_surfaces[p_id] for p_id in range(len(parcelles))])
+        solver.Add(c_surface==t_surface)
+    solution = solver.Assignment()
+    solution.Add(target_assolement)
+    collector = solver.AllSolutionCollector(solution)
+    phase = solver.Phase(target_assolement, solver.INT_VAR_SIMPLE, solver.INT_VALUE_SIMPLE)
+    solver.Solve(phase, [collector])
+    num_solutions = collector.SolutionCount()
+    print("num_solutions: ", num_solutions)
+    
+    
 def or_compute(working_year):
     solver = pywrapcp.Solver('Assolement ' + str(working_year))
     authorized = {}
