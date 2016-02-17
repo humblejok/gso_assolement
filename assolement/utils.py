@@ -10,35 +10,74 @@ from ortools.constraint_solver import pywrapcp
 def make_int(fl_value):
     return int(fl_value * 1000.0)
 
-
 def assolement_compute(working_year):
     solver = pywrapcp.Solver('Assolement ' + str(working_year))
     db_parcelles = Parcelle.objects.filter(surface__gt=0.0).order_by('nom')
-    db_cultures = Culture.objects.filter(surface__gt=0.0).order_by('nom')[0:3]
-    parcelles = [parcelle.id for parcelle in db_parcelles]
-    p_surfaces = [solver.IntConst(make_int(parcelle.surface)) for parcelle in db_parcelles]
+    db_cultures = Culture.objects.filter(surface__gt=0.0).order_by('nom')
     cultures = [culture.id for culture in db_cultures]
-    current_assolement = [0 for parcelle in db_parcelles]
-    target_assolement = [solver.IntVar(0, len(cultures), 'parcelle_%i' % i) for i in range(len(parcelles))]
+    parcelles = [parcelle.id for parcelle in db_parcelles]
+    p_surfaces = [make_int(parcelle.surface) for parcelle in db_parcelles]
     
     c_min_surfaces = [make_int(culture.surface * (1.0 - (culture.tolerance / 100.0))) for culture in db_cultures]
     c_max_surfaces = [make_int(culture.surface * (1.0 + (culture.tolerance / 100.0))) for culture in db_cultures]
+    for c_idx in range(0, len(cultures)):
+        print db_cultures[c_idx].nom, db_cultures[c_idx].surface
+        parcelles_count = solver.IntVar(1, len(parcelles) + 1)
+        parcelles_assignment = [solver.IntVar(0,1, 'parcelle_%i' % p_idx) for p_idx in range(0, len(parcelles))]
+        c_surface = solver.IntVar(c_min_surfaces[c_idx], c_max_surfaces[c_idx], 'c_surface_%i' % c_idx)
+        p_sum = solver.ScalProd(parcelles_assignment, p_surfaces)
+        print [parcelles_assignment[p_idx] * parcelles[p_idx] for p_idx in range(0, len(parcelles))]
+        solver.Add(solver.AllDifferentExcept([parcelles_assignment[p_idx] * parcelles[p_idx] for p_idx in range(0, len(parcelles))], 0))
+        solver.Add(c_surface==p_sum)
+        solver.Add(parcelles_count==solver.Sum(parcelles_assignment))
+        
+        solution = solver.Assignment()
+        solution.Add(parcelles_assignment)
+        collector = solver.AllSolutionCollector(solution)
+        solver.Solve(solver.Phase(parcelles_assignment, solver.CHOOSE_FIRST_UNBOUND, solver.ASSIGN_CENTER_VALUE),[collector])
+        num_solutions = collector.SolutionCount()
+        print("P:", sum([db_parcelles[i].surface if collector.Value(0, parcelles_assignment[i])==1 else 0 for i in range(len(parcelles_assignment))]))
+        print("P:", sum([db_parcelles[i].surface if collector.Value(2, parcelles_assignment[i])==1 else 0 for i in range(len(parcelles_assignment))]))
+        print("P:", sum([db_parcelles[i].surface if collector.Value(3, parcelles_assignment[i])==1 else 0 for i in range(len(parcelles_assignment))]))
+        print("P:", sum([db_parcelles[i].surface if collector.Value(200, parcelles_assignment[i])==1 else 0 for i in range(len(parcelles_assignment))]))
+        print("num_solutions: ", num_solutions)
+        print('failures:', solver.Failures())
+        print('branches:', solver.Branches())
+        print('WallTime:', solver.WallTime())
+        break
     
-    # PRE ASSIGNED aka LUZERNE
-    for i in range(len(parcelles)):
-        if current_assolement[i]:
-            solver.Add(target_assolement[i] == current_assolement[i])
-    for i in range(len(cultures)):
-        c_surface = solver.IntVar(c_min_surfaces[i], c_max_surfaces[i], 'c_surface')
-        t_surface = solver.Sum([p_surfaces[p_id] for p_id in range(len(parcelles))])
-        solver.Add(c_surface==t_surface)
+def _assolement_compute(working_year):
+    solver = pywrapcp.Solver('Assolement ' + str(working_year))
+    db_parcelles = Parcelle.objects.filter(surface__gt=0.0).order_by('nom')
+    db_cultures = Culture.objects.filter(surface__gt=0.0).order_by('nom')
+    parcelles = [parcelle.id for parcelle in db_parcelles]
+    cultures = [-1] + [culture.id for culture in db_cultures]
+    print parcelles
+    print cultures
+    
+    p_surfaces = [solver.IntVar(0, make_int(parcelle.surface), 'surface_%i' % parcelle.id) for parcelle in db_parcelles]
+    
+    p_assignments = [solver.IntVar(0, len(cultures), 'parcelle_%i' % i) for i in range(len(parcelles))]
+    
+    c_min_surfaces = [0] + [make_int(culture.surface * (1.0 - (culture.tolerance / 100.0))) for culture in db_cultures]
+    c_max_surfaces = [1000000000] + [make_int(culture.surface * (1.0 + (culture.tolerance / 100.0))) for culture in db_cultures]
+    
+    for c_idx in range(1, len(cultures)):
+        c_surface = solver.IntVar(c_min_surfaces[c_idx], c_max_surfaces[c_idx], 'c_surface_%i' % c_idx)
+        c_sum = solver.Sum([p_surfaces[p_id] for p_id in range(len(parcelles)) if p_assignments[p_id]==c_idx])
+        print c_idx, c_sum
+        solver.Add(c_sum==c_surface)
+    
     solution = solver.Assignment()
-    solution.Add(target_assolement)
+    solution.Add(p_assignments)
     collector = solver.AllSolutionCollector(solution)
-    phase = solver.Phase(target_assolement, solver.INT_VAR_SIMPLE, solver.INT_VALUE_SIMPLE)
+    phase = solver.Phase(p_assignments, solver.INT_VAR_SIMPLE, solver.INT_VALUE_SIMPLE)
     solver.Solve(phase, [collector])
     num_solutions = collector.SolutionCount()
     print("num_solutions: ", num_solutions)
+    print('failures:', solver.Failures())
+    print('branches:', solver.Branches())
+    print('WallTime:', solver.WallTime())
     
     
 def or_compute(working_year):
