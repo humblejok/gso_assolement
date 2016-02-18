@@ -13,38 +13,75 @@ def make_int(fl_value):
 def assolement_compute(working_year):
     solver = pywrapcp.Solver('Assolement ' + str(working_year))
     db_parcelles = Parcelle.objects.filter(surface__gt=0.0).order_by('nom')
-    db_cultures = Culture.objects.filter(surface__gt=0.0).order_by('nom')
+    db_cultures = Culture.objects.filter(surface__gt=0.0).order_by('nom')[0:3]
     cultures = [culture.id for culture in db_cultures]
     parcelles = [parcelle.id for parcelle in db_parcelles]
     p_surfaces = [make_int(parcelle.surface) for parcelle in db_parcelles]
     
+    c_range = range(0, len(cultures))
+    p_range = range(0, len(parcelles))
+    
     c_min_surfaces = [make_int(culture.surface * (1.0 - (culture.tolerance / 100.0))) for culture in db_cultures]
     c_max_surfaces = [make_int(culture.surface * (1.0 + (culture.tolerance / 100.0))) for culture in db_cultures]
-    for c_idx in range(0, len(cultures)):
-        print db_cultures[c_idx].nom, db_cultures[c_idx].surface
-        parcelles_count = solver.IntVar(1, len(parcelles) + 1)
-        parcelles_assignment = [solver.IntVar(0,1, 'parcelle_%i' % p_idx) for p_idx in range(0, len(parcelles))]
+    
+    cultures_assignments = {}
+    cultures_assignments_as_list = []
+    for c_idx in c_range:
+        for p_idx in p_range:
+            cultures_assignments[(c_idx, p_idx)] = solver.IntVar(0,1, 'c_%i_p_%i' % (c_idx, p_idx))
+            cultures_assignments_as_list.append(cultures_assignments[(c_idx, p_idx)])
+    # Rien ou une seule culture par parcelle
+    for p_idx in p_range:
+        solver.Add(solver.Sum([cultures_assignments[(c_idx, p_idx)] for c_idx in c_range])<=1)
+    # La surface cultivee est dans le range
+    for c_idx in c_range:
         c_surface = solver.IntVar(c_min_surfaces[c_idx], c_max_surfaces[c_idx], 'c_surface_%i' % c_idx)
-        p_sum = solver.ScalProd(parcelles_assignment, p_surfaces)
-        print [parcelles_assignment[p_idx] * parcelles[p_idx] for p_idx in range(0, len(parcelles))]
-        solver.Add(solver.AllDifferentExcept([parcelles_assignment[p_idx] * parcelles[p_idx] for p_idx in range(0, len(parcelles))], 0))
-        solver.Add(c_surface==p_sum)
-        solver.Add(parcelles_count==solver.Sum(parcelles_assignment))
+        solver.Add(solver.ScalProd([cultures_assignments[(c_idx, p_idx)] for p_idx in p_range], p_surfaces)==c_surface)
+        forbidden_parcelles = []
+        forced_parcelles = []
+        for p_idx in p_range:
+            if db_cultures[c_idx].sols_interdits.filter(id=db_parcelles[p_idx].type_de_sol.id).exists():
+                forbidden_parcelles.append(p_idx)
+            elif db_cultures[c_idx].sols_deconseilles.filter(id=db_parcelles[p_idx].type_de_sol.id).exists():
+                # forbidden_parcelles.append(p_idx)
+                None
+            elif db_cultures[c_idx].duree_culture>1:
+                count = 0
+                for year in reversed(range(working_year-db_cultures[c_idx].duree_culture, working_year)):
+                    previous = db_parcelles[p_idx].historique.filter(annee=year)
+                    if previous.exists():
+                        if previous[0].culture.id==db_cultures[c_idx].id:
+                            count += 1
+                        else:
+                            break
+                    else:
+                        break
+                if count>0 and count<db_cultures[c_idx].duree_culture:
+                    forced_parcelles.append(p_idx)
+                    continue
+            if db_cultures[c_idx].precedents_interdits.count()>0 and db_parcelles[p_idx].historique.filter(annee=working_year-1, culture__in=db_cultures[c_idx].precedents_interdits.all()).exists():
+                forbidden_parcelles.append(p_idx)
+            elif db_cultures[c_idx].precedents_deconseilles.count()>0 and db_parcelles[p_idx].historique.filter(annee=working_year-1, culture__in=db_cultures[c_idx].precedents_deconseilles.all()).exists():
+                # forbidden_parcelles.append(p_idx)
+                None
+        for p_idx in forbidden_parcelles:
+            print db_cultures[c_idx].nom, db_cultures[c_idx].surface, 'CANNOT', db_parcelles[p_idx].nom
+            solver.Add(cultures_assignments[(c_idx, p_idx)]==0)
+        for p_idx in forced_parcelles:
+            print db_cultures[c_idx].nom, db_cultures[c_idx].surface, 'MUST', db_parcelles[p_idx].nom
+            solver.Add(cultures_assignments[(c_idx, p_idx)]==1)
         
-        solution = solver.Assignment()
-        solution.Add(parcelles_assignment)
-        collector = solver.AllSolutionCollector(solution)
-        solver.Solve(solver.Phase(parcelles_assignment, solver.CHOOSE_FIRST_UNBOUND, solver.ASSIGN_CENTER_VALUE),[collector])
-        num_solutions = collector.SolutionCount()
-        print("P:", sum([db_parcelles[i].surface if collector.Value(0, parcelles_assignment[i])==1 else 0 for i in range(len(parcelles_assignment))]))
-        print("P:", sum([db_parcelles[i].surface if collector.Value(2, parcelles_assignment[i])==1 else 0 for i in range(len(parcelles_assignment))]))
-        print("P:", sum([db_parcelles[i].surface if collector.Value(3, parcelles_assignment[i])==1 else 0 for i in range(len(parcelles_assignment))]))
-        print("P:", sum([db_parcelles[i].surface if collector.Value(200, parcelles_assignment[i])==1 else 0 for i in range(len(parcelles_assignment))]))
-        print("num_solutions: ", num_solutions)
-        print('failures:', solver.Failures())
-        print('branches:', solver.Branches())
-        print('WallTime:', solver.WallTime())
-        break
+    
+    solution = solver.Assignment()
+    solution.Add(cultures_assignments_as_list)
+    collector = solver.AllSolutionCollector(solution)
+    phase = solver.Phase(cultures_assignments_as_list, solver.INT_VAR_SIMPLE, solver.INT_VALUE_SIMPLE)
+    solver.Solve(phase, [collector])
+    num_solutions = collector.SolutionCount()
+    print("num_solutions: ", num_solutions)
+    print('failures:', solver.Failures())
+    print('branches:', solver.Branches())
+    print('WallTime:', solver.WallTime())
     
 def _assolement_compute(working_year):
     solver = pywrapcp.Solver('Assolement ' + str(working_year))
