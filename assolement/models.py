@@ -21,6 +21,7 @@ class Culture(models.Model):
     sols_interdits = models.ManyToManyField("TypeSol", related_name='sols_interdits')
     sols_deconseilles = models.ManyToManyField("TypeSol", related_name='sols_deconseilles')
     sols_conseilles = models.ManyToManyField("TypeSol", related_name='sols_conseilles')
+    obligatoire = models.BooleanField()
     
 class Annee(models.Model):
     annee = models.IntegerField()
