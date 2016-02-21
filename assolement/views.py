@@ -7,6 +7,7 @@ from json import dumps, loads
 from django.forms.models import model_to_dict
 import datetime
 from assolement import utils
+import traceback
 
 def clean_post_value(value):
     if isinstance(value, list) and len(value)==1:
@@ -65,9 +66,8 @@ def compute_year(request):
         json_response = {'success': False, 'message': 'Calcul assolement: Un argument est manquant dans l''appel au serveur.'}
     else:
         year = int(clean_post_value(request.POST['year']))
-        utils.compute(year)
-        parcelles = [dict_to_json_compliance(model_to_dict(parcelle), Parcelle) for parcelle in Parcelle.objects.all().order_by('nom')]
-        json_response = {'success': True, 'updated_values': parcelles}
+        solutions = utils.assolement_maximize(year)
+        json_response = {'success': True, 'solutions': solutions}
     return HttpResponse(dumps(json_response),"json")
 
 def update_history(request):
@@ -133,13 +133,18 @@ def create_update(request):
                 entity = target_class()
                 update = False
             for field in target_class._meta.fields:
-                if field.name in request.POST and field.name!='id':
+                if field.name in request.POST and field.name!='id' and field.__class__.__name__!="BooleanField":
                     if field.__class__.__name__=="ForeignKey":
                         setattr(entity, field.name, field.rel.to.objects.get(id=request.POST[field.name]))
                     elif field.__class__.__name__=="FloatField":
                         setattr(entity, field.name, float(clean_post_value(request.POST[field.name]).replace(',', '.').replace('%', '')))
                     else:
                         setattr(entity, field.name, clean_post_value(request.POST[field.name]))
+                elif field.__class__.__name__=="BooleanField":
+                    if field.name in request.POST and request.POST[field.name].lower() in ['on','true']:
+                        setattr(entity, field.name, True)
+                    else:
+                        setattr(entity, field.name, False)
             # Pre-sauvegarde pour affecter les champs M2M
             entity.save()
             for field in target_class._meta.many_to_many:
@@ -150,5 +155,6 @@ def create_update(request):
             entity.save()
             json_response = {'success': True, 'update': update, 'prefix': prefix, 'value': dict_to_json_compliance(model_to_dict(entity), target_class)}
         except:
+            traceback.print_exc()
             json_response = {'success': False, 'message': 'Mise a jour: L''objet avec l''identifiant [' + entity_id + '] et le type [' + str(target_class) + '] n'' a pas ete trouve dans la base de donnees.' }
     return HttpResponse(dumps(json_response),"json")

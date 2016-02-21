@@ -35,7 +35,7 @@
 								'culture': {'fields': ['id', 'nom', 'surface', 'pourcentage', 'tolerance',
 													   'precedents_interdits', 'precedents_deconseilles', 'precedents_conseilles',
 													    'annees_retour', 'duree_culture',
-													    'sols_interdits', 'sols_deconseilles', 'sols_conseilles'],
+													    'sols_interdits', 'sols_deconseilles', 'sols_conseilles', 'obligatoire'],
 											'visible_fields': ['id', 'nom', 'surface', 'pourcentage', 'tolerance'],
 											'ajax': '/create_update.html',
 											'target_class': 'assolement.models.Culture',
@@ -54,6 +54,8 @@
 
 			var start_year = new Date().getFullYear() - 4;
 			var visbile_years = 8;
+			var workingYear = -1;
+			var solutions = {};
 
 			$(document).ready(function () {
 				csrftoken = getCookie('csrftoken');
@@ -62,28 +64,111 @@
 					refreshTable(key);
 				});
 				buildHistoryTable();
-				console.log(csrftoken);
 			});
 
-			function computeYear(index) {
+			function chooseSolution(solution_index) {
+				console.log(solutions[solution_index]);
+				cleanYear(workingYear, false);
+				$("#solutions_modal").modal('hide');
+				$.each(solutions[solution_index], function(c_idx, working_data) {
+					$.each(working_data.allocation, function(p_idx, parcelle_id) {
+						console.log(parcelle_id, workingYear, c_idx);
+						$("#parcelle-" + parcelle_id + "-" + workingYear).val(c_idx.toString());
+					});
+				});
+				saveHistory();
+			}
+
+			function displaySolutions(start_index) {
+				var mandatory = {};
+				$("#solutions_table").empty();
+				var header ="<thead><tr class='info'><th class='col-lg-2 info'>&nbsp;</th><th id='sol_header_0' class='col-lg-2'>-</th><th id='sol_header_1' class='col-lg-2'>-</th><th id='sol_header_2' class='col-lg-2'>-</th><th id='sol_header_3' class='col-lg-2'>-</th><th id='sol_header_4' class='col-lg-2'>-</th></tr></thead>";
+				$("#solutions_table").append(header);
+				var htmlRow = "<tbody>";
+				$.each(cultures, function(index, culture){
+					htmlRow += "<tr>";
+					htmlRow += "<th class='info'>" + culture.nom + "<br/><small>Surface:&nbsp;" + culture.surface + "</small></th>";
+					htmlRow += "<td id='culture_" + culture.id + "_sol_0'>-</td>";
+					htmlRow += "<td id='culture_" + culture.id + "_sol_1'>-</td>";
+					htmlRow += "<td id='culture_" + culture.id + "_sol_2'>-</td>";
+					htmlRow += "<td id='culture_" + culture.id + "_sol_3'>-</td>";
+					htmlRow += "<td id='culture_" + culture.id + "_sol_4'>-</td>";
+					htmlRow += "</tr>";
+					mandatory[culture.id.toString()] = culture.obligatoire;
+				});
+				htmlRow += "</tbody>";
+				$("#solutions_table").append(htmlRow);
+				var col_index = 0;
+				$.each(solutions, function(index, solution){
+					$("#sol_header_" + col_index).html("Solution " + (index+1) + "&nbsp;<button class='btn btn-info btn-sm' onclick='chooseSolution(" + index + ")'><span class='glyphicon glyphicon-ok'/></button>");
+					$.each(solution, function(culture_id, data) {
+						var allocationText = "";
+						allocationText += "<small>Surface allouée:&nbsp;" + data.allocated_surface + "<br/>";
+						$.each(data.allocation, function (p_index, parcelle_id) {
+							
+							$.each(parcelles, function(parcelle_index, parcelle) {
+								if (parcelle.id==parcelle_id) {
+									allocationText += parcelle.nom + "<br/>"
+								}
+							});
+						});
+						allocationText += "</small>";
+						$("#culture_" + culture_id + "_sol_" + col_index).html(allocationText);
+						var colorClass = 'warning';
+						if (data.match) {
+							colorClass = 'success';
+						} else if (mandatory[culture_id] || data.allocated_surface==0.0) {
+							colorClass = 'danger';
+						}
+						$("#culture_" + culture_id + "_sol_" + col_index).addClass(colorClass);
+					});
+					col_index = col_index + 1;
+				});
+			}
+
+			function yearComputed(event) {
 				$("#workingIndicator").toggleClass("invisible");
+				if (event.success) {
+					if (Object.keys(event.solutions).length>0) {
+						solutions = event.solutions;
+						displaySolutions(0);
+						$("#solutions_modal").modal('show');
+					} else {
+						alert("Aucun assolement correspondant à vos critères n'a été trouvé!");
+					}
+				} else {
+					alert("Une erreur est survenue lors du calcul!");
+				}
+			}
+
+			function computeYear(year) {
+				$("#workingIndicator").toggleClass("invisible");
+				workingYear = year;
 				var computeForm = new FormData();
-				computeForm.append("year", index);
+				computeForm.append("year", year);
 				$.ajax({
 					url: '/compute_year.html',
 					type: 'POST',
 					data: computeForm,
 					contentType: false,
 					processData: false,
-					success: historySaved,
+					success: yearComputed,
 					error: onCallError
 				});
+			}
+
+			function cleanYear(year, save) {
+				$.each(parcelles, function(index, parcelle){
+					$("#parcelle-" + parcelle.id + "-" + year).val("JACHERE");
+				});
+				if (save) {
+					saveHistory();
+				}
 			}
 
 			function buildHistoryTable(start_year) {
 				var working_year = new Date().getFullYear() - 4;
 				if (start_year) {
-					console.log(working_year);
 					working_year = start_year;
 				}
 				var cultures_options = "<option value='JACHERE'>-</option>";
@@ -94,7 +179,7 @@
 				var html_append;
 				html_append = "<tr><th class='col-lg-1'>Parcelle</th>";
 				for (var index=working_year;index<working_year + visbile_years; index++) {
-					html_append +="<th>" + index + (working_year+4<=index?"&nbsp;<button class='btn btn-info btn-sm' type='button' onclick='computeYear(" + index + ")'><span class='glyphicon glyphicon-refresh'/></button>":"") + "</th>";
+					html_append +="<th>" + index + (working_year+4<=index?"&nbsp;<button class='btn btn-info btn-sm' type='button' onclick='cleanYear(" + index + ", true)'><span class='glyphicon glyphicon-trash'/></button>&nbsp;<button class='btn btn-info btn-sm' type='button' onclick='computeYear(" + index + ")'><span class='glyphicon glyphicon-refresh'/></button>":"") + "</th>";
 				}
 				html_append +="</tr>";
 				$("#historique_table").append(html_append);
@@ -114,7 +199,6 @@
 						$.each(parcelle.historique, function(sub_index, annee){
 							if (annee.annee==rolling_year) {
 								not_found = false;
-								console.log("#parcelle-" + parcelle.id + "-" + rolling_year, annee);
 								$("#parcelle-" + parcelle.id + "-" + rolling_year).val(annee.culture);
 							}
 						});
@@ -127,7 +211,6 @@
 
 			function historySaved(event) {
 				if (event.success) {
-					console.log(event);
 					parcelles = event.updated_values;
 					buildHistoryTable();
 					$("#workingIndicator").toggleClass("invisible");
@@ -230,12 +313,10 @@
 			function editRow(prefix, id) {
 				var data = {};
 				$.each(window[prefix + "s"], function(index, value) {
-					console.log(value.id, id);
 					if (value.id===id) {
 						data = value;
 					}
 				});
-				console.log(prefix, data);
 				showModal(prefix, data);
 			}
 
@@ -273,10 +354,11 @@
 
 			function showModal(prefix, data) {
 				if (data) {
-					console.log(data);
 					$.each(descriptions[prefix].fields, function(index, value) {
-						if ($("#" + prefix + "_" + value).is("input")) {
+						if ($("#" + prefix + "_" + value).is("input") && $("#" + prefix + "_" + value).attr("type")!=="checkbox") {
 							$("#" + prefix + "_" + value).val(data[value]);
+						} else if ($("#" + prefix + "_" + value).is("input") && $("#" + prefix + "_" + value).attr("type")==="checkbox") {
+							$("#" + prefix + "_" + value).prop("checked", data[value]);
 						} else if (!$("#" + prefix + "_" + value + "[multiple]").length) {
 							$("#" + prefix + "_" + value).val(data[value].id);
 						} else {
@@ -363,7 +445,8 @@
 								<button type="button" class="close" data-dismiss="modal" aria-label="Fermer"><span aria-hidden="true">&times;</span></button>
 								<h5 class="modal-title" id="parcelle_modal_label">Créer/éditer un type de sol</h5>
 							</div>
-							<form id="parcelle_form" onsubmit="submitModal(event, 'parcelle')" role="form" action="/create_update.html" method="POST">{{csrf_token}}
+							<form id="parcelle_form" onsubmit="submitModal(event, 'parcelle')" role="form" action="/create_update.html" method="POST">
+								<input type="hidden" value="{{csrf_token}}"></input>
 								<div class="modal-body">
 									<input type="hidden" id="parcelle_id" name="parcelle_id"></input>
 									<div class="form-group">
@@ -420,7 +503,7 @@
 										<input type="text" class="form-control" id="culture_tolerance" name="culture_tolerance" placeholder="Entrer une tolérance"></input>
 									</div>
 									<div class="checkbox">
-										<label<input type="text" class="form-control" id="culture_obligatoire" name="culture_obligatoire">Surface obligatoire</label>
+										<label><input type="checkbox" id="culture_obligatoire" name="culture_obligatoire"/>Surface obligatoire</label>
 									</div>
 									<div class="form-group">
 										<label for="culture_annees_retour">Années avant retour</label>
@@ -537,6 +620,26 @@
 						</div>
 					</div>
 				</div>
+
+				<!-- POPUP AFFICHAGE SOLUTIONS -->
+				<div class="modal fade" id="solutions_modal" tabindex="-1" role="dialog" aria-labelledby="solutions_modal_label">
+					<div class="modal-dialog modal-lg" role="document">
+						<div class="modal-content">
+							<div class="modal-header">
+								<button type="button" class="close" data-dismiss="modal" aria-label="Fermer"><span aria-hidden="true">&times;</span></button>
+								<h4 class="modal-title" id="solutions_modal_label">Propositions d'assolements</h5>
+							</div>
+							<div class="modal-body">
+								<table id="solutions_table" class="table table-bordered">
+								</table>
+							</div>
+							<div class="modal-footer">
+								<button type="button" class="btn btn-primary" data-dismiss="modal">Fermer</button>
+							</div>
+						</div>
+					</div>
+				</div>
+
 			</div>
 		</div>
 	</body>

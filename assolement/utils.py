@@ -11,6 +11,7 @@ def make_int(fl_value):
     return int(fl_value * 1000.0)
 
 def assolement_maximize(working_year):
+    solutions = {}
     solver = pywrapcp.Solver('Assolement ' + str(working_year))
     db_parcelles = Parcelle.objects.filter(surface__gt=0.0).order_by('nom')
     db_cultures = Culture.objects.filter(surface__gt=0.0).order_by('nom')
@@ -101,24 +102,27 @@ def assolement_maximize(working_year):
             cultures_assignments_as_list.append(cultures_assignments[(c_idx, p_idx)])
     solution = solver.Assignment()
     solution.Add(cultures_assignments_as_list)
-    phase = solver.Phase(cultures_assignments_as_list, solver.INT_VAR_DEFAULT, solver.ASSIGN_MAX_VALUE)
+    phase = solver.Phase(cultures_assignments_as_list, solver.CHOOSE_FIRST_UNBOUND, solver.ASSIGN_MAX_VALUE)
     solver.NewSearch(phase, objectives)
     num_solutions = 0
     while solver.NextSolution():
+        solutions[num_solutions] = {}
         print "SOLUTION NO:", num_solutions
         for c_idx in c_range:
-            surface = 0.0
+            solutions[num_solutions][cultures[c_idx]] = {'allocation': [], 'allocated_surface': 0.0, 'match': False}
             for p_idx in p_range:
-                surface += db_parcelles[p_idx].surface * cultures_assignments[(c_idx, p_idx)].Value()
+                solutions[num_solutions][cultures[c_idx]]['allocated_surface'] += db_parcelles[p_idx].surface * cultures_assignments[(c_idx, p_idx)].Value()
+                if cultures_assignments[(c_idx, p_idx)].Value()==1:
+                    solutions[num_solutions][cultures[c_idx]]['allocation'].append(parcelles[p_idx])
             culture = db_cultures[c_idx]
-            min = culture.surface * (1.0 - (culture.tolerance / 100.0))
-            max = culture.surface * (1.0 + (culture.tolerance / 100.0))
-            print db_cultures[c_idx].nom, min, max, surface, 'OK' if surface>=min and surface<=max else 'KO'
+            solutions[num_solutions][cultures[c_idx]]['match'] = solutions[num_solutions][cultures[c_idx]]['allocated_surface']>=(culture.surface * (1.0 - (culture.tolerance / 100.0))) and solutions[num_solutions][cultures[c_idx]]['allocated_surface']<=(culture.surface * (1.0 + (culture.tolerance / 100.0)))
         num_solutions += 1
     print("num_solutions: ", num_solutions)
     print('failures:', solver.Failures())
     print('branches:', solver.Branches())
     print('WallTime:', solver.WallTime())
+    print solutions
+    return solutions
 
 def assolement_compute(working_year):
     solver = pywrapcp.Solver('Assolement ' + str(working_year))
