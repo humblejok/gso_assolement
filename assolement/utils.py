@@ -46,7 +46,7 @@ def get_culture_long_constraints(culture_info, db_parcelles, c_min_surfaces, c_m
     for p_idx in culture_info['db_parcelles']:
         culture_surfaces.append(make_int(db_parcelles[p_idx].surface))
         culture_forced.append(culture_solver.IntVar(0,1, 'c_%i_f_%i' % (culture_info['c_idx'], p_idx)))
-    culture_solver.Add(culture_solver.ScalProd(culture_forced, culture_surfaces)==culture_solver.IntVar(c_min_surfaces[culture_info['c_idx']], c_max_surfaces[culture_info['c_idx']], 'c_surface_%i' % culture_info['c_idx']))
+    culture_solver.Add(culture_solver.ScalProd(culture_forced, culture_surfaces)==culture_solver.IntVar(0, c_max_surfaces[culture_info['c_idx']], 'c_surface_%i' % culture_info['c_idx']))
     f_solution = culture_solver.Assignment()
     f_solution.Add(culture_forced)
     f_phase = culture_solver.Phase(culture_forced, culture_solver.INT_VAR_SIMPLE, culture_solver.ASSIGN_MAX_VALUE)
@@ -62,7 +62,7 @@ def get_culture_long_constraints(culture_info, db_parcelles, c_min_surfaces, c_m
         if surface>c_min_surfaces[culture_info['c_idx']]:
             all_valid_solutions.append(forced_parcelles)
     culture_solver.EndSearch()
-    return all_valid_solutions if len(all_valid_solutions)>0 else all_solutions
+    return (all_valid_solutions, True) if len(all_valid_solutions)>0 else (all_solutions, False)
 
 def get_long_constraints(db_parcelles, cultures, c_min_surfaces, c_max_surfaces, year):
     constraints = {}
@@ -90,10 +90,13 @@ def get_long_constraints(db_parcelles, cultures, c_min_surfaces, c_max_surfaces,
         if long_cultures[culture_id]['surface']>c_max_surfaces[long_cultures[culture.id]['c_idx']]:
             constraints[long_cultures[culture.id]['c_idx']] = []
             all_alternatives = get_culture_long_constraints(long_cultures[culture.id], db_parcelles, c_min_surfaces, c_max_surfaces)
-            for alternative in all_alternatives:
+            for alternative in all_alternatives[0]:
                 sub_constraints = {}
-                for p_idx in alternative:
-                    sub_constraints[(long_cultures[culture.id]['c_idx'], p_idx)] = 1
+                for p_idx in range(0, len(db_parcelles)):
+                    if p_idx in alternative:
+                        sub_constraints[(long_cultures[culture.id]['c_idx'], p_idx)] = 1
+                    elif all_alternatives[1]:
+                        sub_constraints[(long_cultures[culture.id]['c_idx'], p_idx)] = 0
                 constraints[long_cultures[culture.id]['c_idx']].append(sub_constraints)
         else:
             sub_constraints = {}
@@ -135,15 +138,17 @@ def assolement_computer(working_year):
                     for c_idx in c_range:
                         for p_idx in p_range:
                             cultures_assignments[(c_idx, p_idx)] = get_short_constraint(solver, 'c_%i_p_%i' % (c_idx, p_idx), db_cultures[c_idx], db_parcelles[p_idx], working_year, previous_reco, soil_reco)
-                        c_surface = solver.IntVar(c_min_surfaces[c_idx] if db_cultures[c_idx].obligatoire and force_mandatory else 0, c_max_surfaces[c_idx], 'c_surface_%i' % c_idx)
-                        objectives.append(solver.Maximize(c_surface, 1000))
-                        solver.Add(solver.ScalProd([cultures_assignments[(c_idx, p_idx)] for p_idx in p_range], p_surfaces)==c_surface)
                     for assigments in constraints:
                         for key in assigments:
                             cultures_assignments[key] = solver.IntConst(assigments[key], 'c_%i_p_%i' % key)
                     # No culture or only one culture per parcelle
                     for p_idx in p_range:
-                        solver.Add(solver.Sum([cultures_assignments[(c_idx, p_idx)] for c_idx in c_range])<=1)        
+                        solver.Add(solver.Sum([cultures_assignments[(c_idx, p_idx)] for c_idx in c_range])<=1)
+                    # Assign constraints
+                    for c_idx in c_range:
+                        c_surface = solver.IntVar(c_min_surfaces[c_idx] if db_cultures[c_idx].obligatoire and force_mandatory else 0, c_max_surfaces[c_idx], 'c_surface_%i' % c_idx)
+                        objectives.append(solver.Maximize(c_surface, 1000))
+                        solver.Add(solver.ScalProd([cultures_assignments[(c_idx, p_idx)] for p_idx in p_range], p_surfaces)==c_surface)
                     # Convert to list
                     for c_idx in c_range:
                         for p_idx in p_range:
