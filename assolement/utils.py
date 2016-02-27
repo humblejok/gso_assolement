@@ -123,62 +123,63 @@ def assolement_computer(working_year):
     num_solutions = 0
     # solver_type: 2 = CHOOSE_FIRST_UNBOUND, 1 = INT_VAR_SIMPLE
     # solver_type: 3 = ASSIGN_MAX_VALUE, 5 = ASSIGN_CENTER_VALUE
-    for previous_reco in [False, True]:
-        for soil_reco in [False, True]:
-            for constraints in itertools.product(*long_constraints.values()):    
-                solver = pywrapcp.Solver('Assolement ' + str(working_year))
-                cultures_assignments = {}
-                cultures_assignments_as_list = []
-                objectives = []
-                # Assigning defaults
-                for c_idx in c_range:
-                    for p_idx in p_range:
-                        cultures_assignments[(c_idx, p_idx)] = get_short_constraint(solver, 'c_%i_p_%i' % (c_idx, p_idx), db_cultures[c_idx], db_parcelles[p_idx], working_year, previous_reco, soil_reco)
-                    c_surface = solver.IntVar(c_min_surfaces[c_idx] if db_cultures[c_idx].obligatoire else 0, c_max_surfaces[c_idx], 'c_surface_%i' % c_idx)
-                    objectives.append(solver.Maximize(c_surface, 1000))
-                    solver.Add(solver.ScalProd([cultures_assignments[(c_idx, p_idx)] for p_idx in p_range], p_surfaces)==c_surface)
-                for assigments in constraints:
-                    for key in assigments:
-                        cultures_assignments[key] = solver.IntConst(assigments[key], 'c_%i_p_%i' % key)
-                # No culture or only one culture per parcelle
-                for p_idx in p_range:
-                    solver.Add(solver.Sum([cultures_assignments[(c_idx, p_idx)] for c_idx in c_range])<=1)        
-                # Convert to list
-                for c_idx in c_range:
-                    for p_idx in p_range:
-                        cultures_assignments_as_list.append(cultures_assignments[(c_idx, p_idx)])
-                        
-                
-                        
-                solution = solver.Assignment()
-                solution.Add(cultures_assignments_as_list)
-                
-                phase = solver.Phase(cultures_assignments_as_list, solver.CHOOSE_FIRST_UNBOUND, solver.ASSIGN_MAX_VALUE)
-                solver.NewSearch(phase, objectives)
-        
-                while solver.NextSolution():
-                    solutions[num_solutions] = {}
-                    print "SOLUTION NO:", num_solutions
+    for force_mandatory in [True, False]:
+        for previous_reco in [True, False]:
+            for soil_reco in [True, False]:
+                for constraints in itertools.product(*long_constraints.values()):    
+                    solver = pywrapcp.Solver('Assolement ' + str(working_year))
+                    cultures_assignments = {}
+                    cultures_assignments_as_list = []
+                    objectives = []
+                    # Assigning defaults
                     for c_idx in c_range:
-                        solutions[num_solutions][cultures[c_idx]] = {'allocation': [], 'allocated_surface': 0.0, 'match': False}
                         for p_idx in p_range:
-                            solutions[num_solutions][cultures[c_idx]]['allocated_surface'] += db_parcelles[p_idx].surface * cultures_assignments[(c_idx, p_idx)].Value()
-                            if cultures_assignments[(c_idx, p_idx)].Value()==1:
-                                solutions[num_solutions][cultures[c_idx]]['allocation'].append(parcelles[p_idx])
-                        culture = db_cultures[c_idx]
-                        solutions[num_solutions][cultures[c_idx]]['match'] = solutions[num_solutions][cultures[c_idx]]['allocated_surface']>=(culture.surface * (1.0 - (culture.tolerance / 100.0))) and solutions[num_solutions][cultures[c_idx]]['allocated_surface']<=(culture.surface * (1.0 + (culture.tolerance / 100.0)))
-                    for solution_key in solutions:
-                        if solution_key!=num_solutions:
-                            if cmp(solutions[solution_key], solutions[num_solutions])==0:
-                                del solutions[num_solutions]
-                                num_solutions -= 1
-                                break
-                    num_solutions += 1
-                print("num_solutions: ", num_solutions)
-                print('failures:', solver.Failures())
-                print('branches:', solver.Branches())
-                print('WallTime:', solver.WallTime())
-                print solutions
+                            cultures_assignments[(c_idx, p_idx)] = get_short_constraint(solver, 'c_%i_p_%i' % (c_idx, p_idx), db_cultures[c_idx], db_parcelles[p_idx], working_year, previous_reco, soil_reco)
+                        c_surface = solver.IntVar(c_min_surfaces[c_idx] if db_cultures[c_idx].obligatoire and force_mandatory else 0, c_max_surfaces[c_idx], 'c_surface_%i' % c_idx)
+                        objectives.append(solver.Maximize(c_surface, 1000))
+                        solver.Add(solver.ScalProd([cultures_assignments[(c_idx, p_idx)] for p_idx in p_range], p_surfaces)==c_surface)
+                    for assigments in constraints:
+                        for key in assigments:
+                            cultures_assignments[key] = solver.IntConst(assigments[key], 'c_%i_p_%i' % key)
+                    # No culture or only one culture per parcelle
+                    for p_idx in p_range:
+                        solver.Add(solver.Sum([cultures_assignments[(c_idx, p_idx)] for c_idx in c_range])<=1)        
+                    # Convert to list
+                    for c_idx in c_range:
+                        for p_idx in p_range:
+                            cultures_assignments_as_list.append(cultures_assignments[(c_idx, p_idx)])
+                            
+                    
+                            
+                    solution = solver.Assignment()
+                    solution.Add(cultures_assignments_as_list)
+                    
+                    phase = solver.Phase(cultures_assignments_as_list, solver.CHOOSE_FIRST_UNBOUND, solver.ASSIGN_MAX_VALUE)
+                    solver.NewSearch(phase, objectives)
+            
+                    while solver.NextSolution():
+                        solutions[num_solutions] = {}
+                        print "SOLUTION NO:", num_solutions
+                        for c_idx in c_range:
+                            solutions[num_solutions][cultures[c_idx]] = {'allocation': [], 'allocated_surface': 0.0, 'match': False}
+                            for p_idx in p_range:
+                                solutions[num_solutions][cultures[c_idx]]['allocated_surface'] += db_parcelles[p_idx].surface * cultures_assignments[(c_idx, p_idx)].Value()
+                                if cultures_assignments[(c_idx, p_idx)].Value()==1:
+                                    solutions[num_solutions][cultures[c_idx]]['allocation'].append(parcelles[p_idx])
+                            culture = db_cultures[c_idx]
+                            solutions[num_solutions][cultures[c_idx]]['match'] = solutions[num_solutions][cultures[c_idx]]['allocated_surface']>=(culture.surface * (1.0 - (culture.tolerance / 100.0))) and solutions[num_solutions][cultures[c_idx]]['allocated_surface']<=(culture.surface * (1.0 + (culture.tolerance / 100.0)))
+                        for solution_key in solutions:
+                            if solution_key!=num_solutions:
+                                if cmp(solutions[solution_key], solutions[num_solutions])==0:
+                                    del solutions[num_solutions]
+                                    num_solutions -= 1
+                                    break
+                        num_solutions += 1
+                    print("num_solutions: ", num_solutions)
+                    print('failures:', solver.Failures())
+                    print('branches:', solver.Branches())
+                    print('WallTime:', solver.WallTime())
+                    print solutions
     
     return solutions
         
