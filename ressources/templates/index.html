@@ -57,6 +57,8 @@
 			var workingYear = -1;
 			var solutions = {};
 
+			var max_page = 0;
+
 			$(document).ready(function () {
 				csrftoken = getCookie('csrftoken');
 				$('.with-id tr > *:first-child').hide();
@@ -79,20 +81,19 @@
 				saveHistory();
 			}
 
-			function displaySolutions(start_index) {
+			function displaySolutions(page_index) {
 				var mandatory = {};
 				$("#solutions_table").empty();
-				var header ="<thead><tr class='info'><th class='col-lg-2 info'>&nbsp;</th><th id='sol_header_0' class='col-lg-2'>-</th><th id='sol_header_1' class='col-lg-2'>-</th><th id='sol_header_2' class='col-lg-2'>-</th><th id='sol_header_3' class='col-lg-2'>-</th><th id='sol_header_4' class='col-lg-2'>-</th></tr></thead>";
+				var header ="<thead><tr class='info'><th class='col-lg-2 info'><button id='previous_button' class='btn btn-info btn-sm' onclick='displaySolutions(" + (page_index - 1) + ")'><span class='glyphicon glyphicon-menu-left'/></button><button id='next_button' class='btn btn-info btn-sm' onclick='displaySolutions(" + (page_index + 1) + ")'><span class='glyphicon glyphicon-menu-right'/></button></th><th id='sol_header_0' class='col-lg-2'>-</th><th id='sol_header_1' class='col-lg-2'>-</th><th id='sol_header_2' class='col-lg-2'>-</th><th id='sol_header_3' class='col-lg-2'>-</th></tr></thead>";
 				$("#solutions_table").append(header);
 				var htmlRow = "<tbody>";
 				$.each(cultures, function(index, culture){
 					htmlRow += "<tr>";
-					htmlRow += "<th class='info'>" + culture.nom + "<br/><small>Surface:&nbsp;" + culture.surface + "</small></th>";
+					htmlRow += "<th class='info'>" + culture.nom + "<br/><small>Surface:&nbsp;" + culture.surface.toFixed(2) + "</small></th>";
 					htmlRow += "<td id='culture_" + culture.id + "_sol_0'>-</td>";
 					htmlRow += "<td id='culture_" + culture.id + "_sol_1'>-</td>";
 					htmlRow += "<td id='culture_" + culture.id + "_sol_2'>-</td>";
 					htmlRow += "<td id='culture_" + culture.id + "_sol_3'>-</td>";
-					htmlRow += "<td id='culture_" + culture.id + "_sol_4'>-</td>";
 					htmlRow += "</tr>";
 					mandatory[culture.id.toString()] = culture.obligatoire;
 				});
@@ -100,30 +101,39 @@
 				$("#solutions_table").append(htmlRow);
 				var col_index = 0;
 				$.each(solutions, function(index, solution){
-					$("#sol_header_" + col_index).html("Solution " + (index+1) + "&nbsp;<button class='btn btn-info btn-sm' onclick='chooseSolution(" + index + ")'><span class='glyphicon glyphicon-ok'/></button>");
-					$.each(solution, function(culture_id, data) {
-						var allocationText = "";
-						allocationText += "<small>Surface allouée:&nbsp;" + data.allocated_surface + "<br/>";
-						$.each(data.allocation, function (p_index, parcelle_id) {
-							
-							$.each(parcelles, function(parcelle_index, parcelle) {
-								if (parcelle.id==parcelle_id) {
-									allocationText += parcelle.nom + "<br/>"
-								}
+					var s_index = Number(index);
+					if (s_index>=(page_index*4) && s_index<((page_index+1)*4) ) {
+						$("#sol_header_" + col_index).html("Solution " + (s_index+1) + "&nbsp;<button class='btn btn-info btn-sm' onclick='chooseSolution(" + index + ")'><span class='glyphicon glyphicon-ok'/></button>");
+						$.each(solution, function(culture_id, data) {
+							var allocationText = "";
+							allocationText += "<small>Surface allouée:&nbsp;" + data.allocated_surface.toFixed(2) + "<br/>";
+							$.each(data.allocation, function (p_index, parcelle_id) {
+								
+								$.each(parcelles, function(parcelle_index, parcelle) {
+									if (parcelle.id==parcelle_id) {
+										allocationText += parcelle.nom + "<br/>"
+									}
+								});
 							});
+							allocationText += "</small>";
+							$("#culture_" + culture_id + "_sol_" + col_index).html(allocationText);
+							var colorClass = 'warning';
+							if (data.match) {
+								colorClass = 'success';
+							} else if (mandatory[culture_id] || data.allocated_surface==0.0) {
+								colorClass = 'danger';
+							}
+							$("#culture_" + culture_id + "_sol_" + col_index).addClass(colorClass);
 						});
-						allocationText += "</small>";
-						$("#culture_" + culture_id + "_sol_" + col_index).html(allocationText);
-						var colorClass = 'warning';
-						if (data.match) {
-							colorClass = 'success';
-						} else if (mandatory[culture_id] || data.allocated_surface==0.0) {
-							colorClass = 'danger';
-						}
-						$("#culture_" + culture_id + "_sol_" + col_index).addClass(colorClass);
-					});
-					col_index = col_index + 1;
+						col_index = col_index + 1;
+					}
 				});
+				if (page_index==0) {
+					$("#previous_button").prop("disabled", true);
+				}
+				if (page_index==max_page) {
+					$("#next_button").prop("disabled", true);
+				}
 			}
 
 			function yearComputed(event) {
@@ -131,6 +141,8 @@
 				if (event.success) {
 					if (Object.keys(event.solutions).length>0) {
 						solutions = event.solutions;
+						current_page = 0;
+						max_page = Math.floor((Object.keys(event.solutions).length-1) / 4);
 						displaySolutions(0);
 						$("#solutions_modal").modal('show');
 					} else {
@@ -257,6 +269,7 @@
 			}
 
 			function onCallError(xhr, status, error) {
+				$("#workingIndicator").toggleClass("invisible");
 				alert("Le serveur n'est pas dispobible, merci de réessayer ultérieurement!");
 			}
 

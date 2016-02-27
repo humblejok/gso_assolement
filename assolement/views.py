@@ -66,7 +66,7 @@ def compute_year(request):
         json_response = {'success': False, 'message': 'Calcul assolement: Un argument est manquant dans l''appel au serveur.'}
     else:
         year = int(clean_post_value(request.POST['year']))
-        solutions = utils.assolement_maximize(year)
+        solutions = utils.assolement_computer(year)
         json_response = {'success': True, 'solutions': solutions}
     return HttpResponse(dumps(json_response),"json")
 
