@@ -1,35 +1,44 @@
 from django.db import models
+from django.contrib.auth.models import User
 
-class TypeSol(models.Model):
-    numero = models.IntegerField()
-    nom = models.CharField(max_length=128)
+
+
+class SoilKind(models.Model):
+    user = models.ForeignKey(User, null=False)
+    number = models.IntegerField()
+    name = models.CharField(max_length=128)
     
-class LocalisationSol(models.Model):
+class SoilPosition(models.Model):
+    user = models.ForeignKey(User, null=False)
     code = models.CharField(max_length=1)
-    nom = models.CharField(max_length=128)
+    name = models.CharField(max_length=128)
 
-class Culture(models.Model):
-    nom = models.CharField(max_length=128)
+class Crop(models.Model):
+    user = models.ForeignKey(User, null=False)
+    name = models.CharField(max_length=128)
     surface = models.FloatField()
-    pourcentage = models.FloatField()
-    tolerance = models.FloatField()
-    precedents_interdits = models.ManyToManyField("Culture", related_name='cultures_interdits')
-    precedents_deconseilles = models.ManyToManyField("Culture", related_name='cultures_deconseilles')
-    precedents_conseilles = models.ManyToManyField("Culture", related_name='cultures_conseilles')
-    annees_retour = models.IntegerField()
-    duree_culture = models.IntegerField()
-    sols_interdits = models.ManyToManyField("TypeSol", related_name='sols_interdits')
-    sols_deconseilles = models.ManyToManyField("TypeSol", related_name='sols_deconseilles')
-    sols_conseilles = models.ManyToManyField("TypeSol", related_name='sols_conseilles')
-    obligatoire = models.BooleanField()
+    percentage = models.FloatField()
+    threshold = models.FloatField()
+    previous_forbidden = models.ManyToManyField("Culture", related_name='cultures_previous_forbidden')
+    previous_not_reco = models.ManyToManyField("Culture", related_name='cultures_previous_not_reco')
+    previous_reco = models.ManyToManyField("Culture", related_name='cultures_previous_reco')
+    years_return = models.IntegerField()
+    crop_duration = models.IntegerField()
+    soils_forbidden = models.ManyToManyField("SoilKind", related_name='cultures_soils_forbidden')
+    soils_not_reco = models.ManyToManyField("SoilKind", related_name='cultures_soils_not_reco')
+    soils_reco = models.ManyToManyField("SoilKind", related_name='cultures_soils_reco')
+    mandatory = models.BooleanField()
+    winter = models.BooleanField()
     
-class Annee(models.Model):
-    annee = models.IntegerField()
-    culture = models.ForeignKey(Culture, null=True)
+    
+class Rotation(models.Model):
+    year = models.IntegerField()
+    crop = models.ForeignKey(Crop, null=True)
 
-class Parcelle(models.Model):
-    nom = models.CharField(max_length=128)
+class Parcel(models.Model):
+    user = models.ForeignKey(User, null=False)
+    name = models.CharField(max_length=128)
     surface = models.FloatField(max_length=128)
-    type_de_sol = models.ForeignKey(TypeSol)
-    localisation = models.ForeignKey(LocalisationSol)
-    historique = models.ManyToManyField(Annee)
+    soil_kind = models.ForeignKey(SoilKind)
+    position = models.ForeignKey(SoilPosition)
+    history = models.ManyToManyField(Rotation)

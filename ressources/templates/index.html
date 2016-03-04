@@ -1,10 +1,10 @@
+{% load i18n %}
 <!DOCTYPE html>
-
 <html lang="en">
 
 	<head>
 
-		<title>Assolement</title>
+		<title>{% blocktrans %}Assolement{% endblocktrans %}</title>
 		<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 		<script src="https://code.jquery.com/jquery-2.2.0.min.js"></script>
 		<script src="https://code.jquery.com/ui/1.12.0-beta.1/jquery-ui.min.js"></script>
@@ -22,35 +22,35 @@
 		<script src="/static/gammasimos.js"></script>
 
 		<script>
-			var descriptions = {'type_sol': {'fields': ['id', 'numero', 'nom'], 'visible_fields': ['id', 'numero', 'nom'],
+			var descriptions = {'type_sol': {'fields': ['id', 'number', 'name'], 'visible_fields': ['id', 'number', 'name'],
 											 'ajax': '/create_update.html',
-											 'target_class': 'assolement.models.TypeSol',
-											 'selects_to_populate': ['culture_sols_interdits', 'culture_sols_deconseilles', 'culture_sols_conseilles','parcelle_type_de_sol']
+											 'target_class': 'assolement.models.SoilKind',
+											 'selects_to_populate': ['crop_soils_forbidden', 'crop_soils_not_reco', 'crop_soils_reco','parcel_soil_kind']
 											},
-								'localisation_sol': {'fields': ['id', 'code', 'nom'], 'visible_fields': ['id', 'code', 'nom'],
+								'localisation_sol': {'fields': ['id', 'code', 'name'], 'visible_fields': ['id', 'code', 'name'],
 													 'ajax': '/create_update.html',
-													 'target_class': 'assolement.models.LocalisationSol',
-													 'selects_to_populate': ['parcelle_localisation']
+													 'target_class': 'assolement.models.SoilLocation',
+													 'selects_to_populate': ['parcel_location']
 													 },
-								'culture': {'fields': ['id', 'nom', 'surface', 'pourcentage', 'tolerance',
-													   'precedents_interdits', 'precedents_deconseilles', 'precedents_conseilles',
-													    'annees_retour', 'duree_culture',
-													    'sols_interdits', 'sols_deconseilles', 'sols_conseilles', 'obligatoire'],
-											'visible_fields': ['id', 'nom', 'surface', 'pourcentage', 'tolerance'],
+								'culture': {'fields': ['id', 'name', 'surface', 'percentage', 'threshold',
+													   'previous_forbidden', 'previous_not_reco', 'previous_reco',
+													    'years_return', 'crop_duration',
+													    'soils_forbidden', 'soils_not_reco', 'soils_reco', 'mandatory', 'winter'],
+											'visible_fields': ['id', 'nom', 'surface', 'percentage', 'threshold', 'mandatory', 'winter'],
 											'ajax': '/create_update.html',
-											'target_class': 'assolement.models.Culture',
+											'target_class': 'assolement.models.Crop',
 											'selects_to_populate': ['culture_precedents_interdits', 'culture_precedents_deconseilles', 'culture_precedents_conseilles']
 											},
-								'parcelle': {'fields': ['id', 'nom', 'surface', 'type_de_sol', 'localisation'], 'visible_fields': ['id', 'nom', 'surface', 'type_de_sol', 'localisation'],
+								'parcelle': {'fields': ['id', 'name', 'surface', 'soil_kind', 'position'], 'visible_fields': ['id', 'name', 'surface', 'soil_kind', 'position'],
 													 'ajax': '/create_update.html',
-													 'target_class': 'assolement.models.Parcelle',
+													 'target_class': 'assolement.models.Parcel',
 													 'selects_to_populate': []
 											 },
 								};
-			var cultures = {{cultures|safe}};
-			var localisation_sols = {{localisations_sol|safe}};
-			var type_sols = {{types_sol|safe}};
-			var parcelles = {{parcelles|safe}};
+			var crops = {{crops|safe}};
+			var soil_positions = {{soil_positions|safe}};
+			var soil_kinds = {{soil_kinds|safe}};
+			var parcels = {{parcels|safe}};
 
 			var start_year = new Date().getFullYear() - 4;
 			var visbile_years = 8;
@@ -69,13 +69,12 @@
 			});
 
 			function chooseSolution(solution_index) {
-				console.log(solutions[solution_index]);
 				cleanYear(workingYear, false);
 				$("#solutions_modal").modal('hide');
 				$.each(solutions[solution_index], function(c_idx, working_data) {
-					$.each(working_data.allocation, function(p_idx, parcelle_id) {
-						console.log(parcelle_id, workingYear, c_idx);
-						$("#parcelle-" + parcelle_id + "-" + workingYear).val(c_idx.toString());
+					$.each(working_data.allocation, function(p_idx, parcel_id) {
+						console.log(parcel_id, workingYear, c_idx);
+						$("#parcel-" + parcel_id + "-" + workingYear).val(c_idx.toString());
 					});
 				});
 				saveHistory();
@@ -107,10 +106,10 @@
 						$.each(solution, function(culture_id, data) {
 							var allocationText = "";
 							allocationText += "<small>Surface allouée:&nbsp;" + data.allocated_surface.toFixed(2) + "<br/>";
-							$.each(data.allocation, function (p_index, parcelle_id) {
+							$.each(data.allocation, function (p_index, parcel_id) {
 								
 								$.each(parcelles, function(parcelle_index, parcelle) {
-									if (parcelle.id==parcelle_id) {
+									if (parcelle.id==parcel_id) {
 										allocationText += parcelle.nom + "<br/>"
 									}
 								});
@@ -146,10 +145,10 @@
 						displaySolutions(0);
 						$("#solutions_modal").modal('show');
 					} else {
-						alert("Aucun assolement correspondant à vos critères n'a été trouvé!");
+						alert("{% blocktrans %}Aucun assolement correspondant à vos critères n'a été trouvé!{% endblocktrans %}");
 					}
 				} else {
-					alert("Une erreur est survenue lors du calcul!");
+					alert("{% blocktrans %}Une erreur est survenue lors du calcul!{% endblocktrans %}");
 				}
 			}
 
@@ -171,7 +170,7 @@
 
 			function cleanYear(year, save) {
 				$.each(parcelles, function(index, parcelle){
-					$("#parcelle-" + parcelle.id + "-" + year).val("JACHERE");
+					$("#parcel-" + parcelle.id + "-" + year).val("{% blocktrans %}JACHERE{% endblocktrans %}");
 				});
 				if (save) {
 					saveHistory();
@@ -183,7 +182,7 @@
 				if (start_year) {
 					working_year = start_year;
 				}
-				var cultures_options = "<option value='JACHERE'>-</option>";
+				var cultures_options = "<option value='{% blocktrans %}JACHERE{% endblocktrans %}'>-</option>";
 				$.each(cultures, function(index, culture){
 					cultures_options += "<option value='" + culture.id + "'>" + culture.nom + "</option>"
 				});
@@ -197,9 +196,9 @@
 				$("#historique_table").append(html_append);
 
 				$.each(parcelles, function(index, parcelle){
-					html_append = "<tr class='parcelle-" + parcelle.id + "'><td>" + parcelle.nom + "</td>";
+					html_append = "<tr class='parcel-" + parcelle.id + "'><td>" + parcelle.nom + "</td>";
 					for (var rolling_year=working_year;rolling_year<working_year + visbile_years; rolling_year++) {
-						html_append +="<td><select id='parcelle-" + parcelle.id + "-" + rolling_year + "' class='form-control parcelle-history'>" + cultures_options + "</select></th>";
+						html_append +="<td><select id='parcel-" + parcelle.id + "-" + rolling_year + "' class='form-control parcel-history'>" + cultures_options + "</select></th>";
 					}
 					html_append += "</tr>";
 					$("#historique_table").append(html_append);
@@ -211,11 +210,11 @@
 						$.each(parcelle.historique, function(sub_index, annee){
 							if (annee.annee==rolling_year) {
 								not_found = false;
-								$("#parcelle-" + parcelle.id + "-" + rolling_year).val(annee.culture);
+								$("#parcel-" + parcelle.id + "-" + rolling_year).val(annee.culture);
 							}
 						});
 						if (not_found) {
-							$("#parcelle-" + parcelle.id + "-" + rolling_year).val("JACHERE");
+							$("#parcel-" + parcelle.id + "-" + rolling_year).val("{% blocktrans %}JACHERE{% endblocktrans %}");
 						}
 					}
 				});
@@ -234,9 +233,9 @@
 			function saveHistory() {
 				$("#workingIndicator").toggleClass("invisible");
 				var all_history = {};
-				$(".parcelle-history").each(function(){
+				$(".parcel-history").each(function(){
 					var culture_id = -1;
-					if ($(this).val()!=="JACHERE") {
+					if ($(this).val()!=="{% blocktrans %}JACHERE{% endblocktrans %}") {
 						culture_id = Number($(this).val());
 					}
 					all_history[$(this).attr("id")] = culture_id;
@@ -270,7 +269,7 @@
 
 			function onCallError(xhr, status, error) {
 				$("#workingIndicator").toggleClass("invisible");
-				alert("Le serveur n'est pas dispobible, merci de réessayer ultérieurement!");
+				alert("{% blocktrans %}Le serveur n'est pas dispobible, merci de réessayer ultérieurement!{% endblocktrans %}");
 			}
 
 			function dataRemoved(event) {
@@ -294,7 +293,7 @@
 				$.each(descriptions[prefix].visible_fields, function(index, field) {
 					html_row += '<td id="' + prefix + '_' + field + '_' + data.id + '">' + (typeof data[field]=='string' || typeof data[field]=='number'?data[field]:data[field].nom) + '</td>';
 				});
-				html_row += '<td><button type="button" class="btn btn-default btn-sm" aria-label="Supprimer" onclick="removeRow(\'' + prefix + '\',' + data.id + ')"><span class="glyphicon glyphicon-remove" aria-hidden="true"></span></button><button type="button" class="btn btn-default btn-sm" aria-label="Editer" onclick="editRow(\'' + prefix + '\',' + data.id + ')"><span class="glyphicon glyphicon-pencil" aria-hidden="true"></span></button></td>';
+				html_row += '<td><button type="button" class="btn btn-default btn-sm" aria-label="{% blocktrans %}Supprimer{% endblocktrans %}" onclick="removeRow(\'' + prefix + '\',' + data.id + ')"><span class="glyphicon glyphicon-remove" aria-hidden="true"></span></button><button type="button" class="btn btn-default btn-sm" aria-label="{% blocktrans %}Editer{% endblocktrans %}" onclick="editRow(\'' + prefix + '\',' + data.id + ')"><span class="glyphicon glyphicon-pencil" aria-hidden="true"></span></button></td>';
 				html_row += '</tr>';
 				$("#" + prefix + "_table").append(html_row);
 				$('.with-id tr > *:first-child').hide();
@@ -393,20 +392,20 @@
 			<div class="row">
 				<!-- MENU -->
 				<ul class="nav nav-tabs">
-					<li role="presentation" class="active"><a data-toggle="tab" href="#historique">Assolement</a></li>
-					<li role="presentation"><a data-toggle="tab" href="#parcelles">Parcelles</a></li>
-					<li role="presentation"><a data-toggle="tab" href="#cultures">Cultures</a></li>
-					<li role="presentation"><a data-toggle="tab" href="#types_sol">Types de sol</a></li>
-					<li role="presentation"><a data-toggle="tab" href="#localisations_sols">Localisation des sols</a></li>
+					<li role="presentation" class="active"><a data-toggle="tab" href="#historique">{% blocktrans %}Assolement{% endblocktrans %}</a></li>
+					<li role="presentation"><a data-toggle="tab" href="#parcelles">{% blocktrans %}Parcelles{% endblocktrans %}</a></li>
+					<li role="presentation"><a data-toggle="tab" href="#cultures">{% blocktrans %}Cultures{% endblocktrans %}</a></li>
+					<li role="presentation"><a data-toggle="tab" href="#types_sol">{% blocktrans %}Types de sol{% endblocktrans %}</a></li>
+					<li role="presentation"><a data-toggle="tab" href="#localisations_sols">{% blocktrans %}Localisation des sols{% endblocktrans %}</a></li>
 				</ul>
 				<!-- MENU CONTENT-->
 				<div class="tab-content">
 					<div id="historique" class="tab-pane fade in active">
 						<p>
 							<br/>
-							<button type="button" class="btn btn-default" aria-label="Sauvegarder les modifications" onclick="saveHistory('parcelle')"><span class="glyphicon glyphicon-save" aria-hidden="true"></span>&nbsp;Sauvegarder l'historique</button>
+							<button type="button" class="btn btn-default" aria-label="{% blocktrans %}Sauvegarder les modifications{% endblocktrans %}" onclick="saveHistory('parcelle')"><span class="glyphicon glyphicon-save" aria-hidden="true"></span>&nbsp;{% blocktrans %}Sauvegarder l'historique{% endblocktrans %}</button>
 							<div id="workingIndicator" class="progress invisible">
-  								<div class="progress-bar progress-bar-info progress-bar-striped active" role="progressbar" aria-valuenow="100" aria-valuemin="0" aria-valuemax="100" style="width: 100%"><span class="sr-only">Veuillez patienter</span></div>
+  								<div class="progress-bar progress-bar-info progress-bar-striped active" role="progressbar" aria-valuenow="100" aria-valuemin="0" aria-valuemax="100" style="width: 100%"><span class="sr-only">{% blocktrans %}Veuillez patienter{% endblocktrans %}</span></div>
   							</div>
 						</p>
 						<table id="historique_table" class="table table-striped table-condensed">
@@ -415,163 +414,163 @@
 					<div id="parcelles" class="tab-pane fade">
 						<p>
 							<br/>
-							<button type="button" class="btn btn-default" aria-label="Créer une parcelle" onclick="showModal('parcelle')"><span class="glyphicon glyphicon-plus" aria-hidden="true"></span>&nbsp;Ajouter une parcelle</button>
+							<button type="button" class="btn btn-default" aria-label="Créer une parcelle" onclick="showModal('parcelle')"><span class="glyphicon glyphicon-plus" aria-hidden="true"></span>&nbsp;{% blocktrans %}Ajouter une parcelle{% endblocktrans %}</button>
 						</p>
 						<table id="parcelle_table" class="table table-striped table-condensed with-id">
-							<tr><th>Id</th><th class="col-lg-2">Nom</th><th class="col-lg-1">Surface</th><th class="col-lg-1">Type de sol</th><th class="col-lg-1">Localisation</th><th class="col-lg-2">Actions</th></tr>
+							<tr><th>Id</th><th class="col-lg-2">{% blocktrans %}Nom<{% endblocktrans %}/th><th class="col-lg-1">{% blocktrans %}Surface{% endblocktrans %}</th><th class="col-lg-1">{% blocktrans %}Type de sol{% endblocktrans %}</th><th class="col-lg-1">{% blocktrans %}Localisation{% endblocktrans %}</th><th class="col-lg-2">{% blocktrans %}Actions{% endblocktrans %}</th></tr>
 						</table>
 					</div>
 					<div id="cultures" class="tab-pane fade">
 						<p>
 							<br/>
-							<button type="button" class="btn btn-default" aria-label="Créer un type de culture" onclick="showModal('culture')"><span class="glyphicon glyphicon-plus" aria-hidden="true"></span>&nbsp;Ajouter un type de culture</button>
+							<button type="button" class="btn btn-default" aria-label="{% blocktrans %}Créer un type de culture{% endblocktrans %}" onclick="showModal('culture')"><span class="glyphicon glyphicon-plus" aria-hidden="true"></span>&nbsp;{% blocktrans %}Ajouter un type de culture{% endblocktrans %}</button>
 						</p>
 						<table id="culture_table" class="table table-striped table-condensed with-id">
-							<tr><th>Id</th><th class="col-lg-2">Nom</th><th class="col-lg-1">Surface</th><th class="col-lg-1">Pourcentage</th><th class="col-lg-1">Tolérance</th><th class="col-lg-2">&nbsp;Actions</th></tr>
+							<tr><th>Id</th><th class="col-lg-2">{% blocktrans %}Nom{% endblocktrans %}</th><th class="col-lg-1">{% blocktrans %}Surface{% endblocktrans %}</th><th class="col-lg-1">{% blocktrans %}Pourcentage{% endblocktrans %}</th><th class="col-lg-1">{% blocktrans %}Tolérance{% endblocktrans %}</th><th class="col-lg-2">&nbsp;{% blocktrans %}Actions{% endblocktrans %}</th></tr>
 						</table>
 					</div>
 					<div id="types_sol" class="tab-pane fade">
 						<p>
 							<br/>
-							<button type="button" class="btn btn-default" aria-label="Créer un type de sol" onclick="showModal('type_sol')"><span class="glyphicon glyphicon-plus" aria-hidden="true"></span>&nbsp;Ajouter un type de sol</button>
+							<button type="button" class="btn btn-default" aria-label="Créer un type de sol" onclick="showModal('type_sol')"><span class="glyphicon glyphicon-plus" aria-hidden="true"></span>&nbsp;{% blocktrans %}Ajouter un type de sol{% endblocktrans %}</button>
 						</p>
 						<table id="type_sol_table" class="table table-striped table-condensed with-id">
-							<tr><th>Id</th><th class="col-lg-2">Numéro</th><th class="col-lg-8">Nom</th><th class="col-lg-2">Actions</th></tr>
+							<tr><th>Id</th><th class="col-lg-2">{% blocktrans %}Numéro{% endblocktrans %}</th><th class="col-lg-8">{% blocktrans %}Nom{% endblocktrans %}</th><th class="col-lg-2">{% blocktrans %}Actions{% endblocktrans %}</th></tr>
 						</table>
 					</div>
 					<div id="localisations_sols" class="tab-pane fade">
 						<p>
 							<br/>
-							<button type="button" class="btn btn-default" aria-label="Créer une localisation de sol" onclick="showModal('localisation_sol')"><span class="glyphicon glyphicon-plus" aria-hidden="true"></span>&nbsp;Ajouter une localisation de sol</button>
+							<button type="button" class="btn btn-default" aria-label="{% blocktrans %}{% blocktrans %}Créer une localisation de sol{%endblocktrans %}" onclick="showModal('localisation_sol')"><span class="glyphicon glyphicon-plus" aria-hidden="true"></span>&nbsp;{% blocktrans %}Ajouter une localisation de sol{% endblocktrans %}</button>
 						</p>
 						<table id="localisation_sol_table" class="table table-striped table-condensed with-id">
-							<tr><th>Id</th><th class="col-lg-2">Code</th><th class="col-lg-8">Nom</th><th class="col-lg-2">Actions</th></tr>
+							<tr><th>Id</th><th class="col-lg-2">{% blocktrans %}Code{% endblocktrans %}</th><th class="col-lg-8">{% blocktrans %}Nom{% endblocktrans %}</th><th class="col-lg-2">{% blocktrans %}Actions{% endblocktrans %}</th></tr>
 						</table>
 					</div>
 				</div>
 
-				<!-- POPUP PARCELLE -->
+				<!-- POPUP PARCEL -->
 				<div class="modal fade" id="parcelle_modal" tabindex="-1" role="dialog" aria-labelledby="parcelle_modal_label">
 					<div class="modal-dialog" role="document">
 						<div class="modal-content">
 							<div class="modal-header">
 								<button type="button" class="close" data-dismiss="modal" aria-label="Fermer"><span aria-hidden="true">&times;</span></button>
-								<h5 class="modal-title" id="parcelle_modal_label">Créer/éditer un type de sol</h5>
+								<h5 class="modal-title" id="parcelle_modal_label">{% blocktrans %}Créer/éditer un type de sol{% endblocktrans %}</h5>
 							</div>
 							<form id="parcelle_form" onsubmit="submitModal(event, 'parcelle')" role="form" action="/create_update.html" method="POST">
 								<input type="hidden" value="{{csrf_token}}"></input>
 								<div class="modal-body">
-									<input type="hidden" id="parcelle_id" name="parcelle_id"></input>
+									<input type="hidden" id="parcel_id" name="parcel_id"></input>
 									<div class="form-group">
-										<label for="parcelle_nom">Nom de la parcelle</label>
-										<input type="text" class="form-control" id="parcelle_nom" name="parcelle_nom" placeholder="Entrer un nom pour la parcelle"></input>
+										<label for="parcelle_nom">{% blocktrans %}Nom de la parcelle{% endblocktrans %}</label>
+										<input type="text" class="form-control" id="parcelle_nom" name="parcelle_nom" placeholder="{% blocktrans %}Entrer un nom pour la parcelle{% endblocktrans %}"></input>
 									</div>
 									<div class="form-group">
-										<label for="parcelle_surface">Surface de la parcelle</label>
-										<input type="text" class="form-control" id="parcelle_surface" name="parcelle_surface" placeholder="Entrer la surface de la parcelle"></input>
+										<label for="parcelle_surface">{% blocktrans %}Surface de la parcelle{% endblocktrans %}</label>
+										<input type="text" class="form-control" id="parcelle_surface" name="parcelle_surface" placeholder="{% blocktrans %}Entrer la surface de la parcelle{% endblocktrans %}"></input>
 									</div>
 									<div class="form-group">
-										<label for="parcelle_type_de_sol">Type de sol</label>
-										<select id="parcelle_type_de_sol" name="parcelle_type_de_sol" class="form-control"></select>
+										<label for="parcel_soil_kind">{% blocktrans %}Type de sol{% endblocktrans %}</label>
+										<select id="parcel_soil_kind" name="parcel_soil_kind" class="form-control"></select>
 									</div>
 									<div class="form-group">
-										<label for="parcelle_localisation">Localisation de la parcelle</label>
-										<select id="parcelle_localisation" name="parcelle_localisation" class="form-control"></select>
+										<label for="parcel_location">{% blocktrans %}Localisation de la parcelle{% endblocktrans %}</label>
+										<select id="parcel_location" name="parcel_location" class="form-control"></select>
 									</div>
 								</div>
 								<div class="modal-footer">
-									<button type="button" class="btn btn-default" data-dismiss="modal">Fermer</button>
-									<button type="submit" role="button" class="btn btn-primary">Sauvegarder</button>
+									<button type="button" class="btn btn-default" data-dismiss="modal">{% blocktrans %}Fermer{% endblocktrans %}</button>
+									<button type="submit" role="button" class="btn btn-primary">{% blocktrans %}Sauvegarder{% endblocktrans %}</button>
 								</div>
 							</form>
 						</div>
 					</div>
 				</div>
 
-				<!-- POPUP TYPE DE CULTURE -->
+				<!-- POPUP CROP KIND -->
 				<div class="modal fade" id="culture_modal" tabindex="-1" role="dialog" aria-labelledby="culture_modal_label">
 					<div class="modal-dialog" role="document">
 						<div class="modal-content">
 							<div class="modal-header">
 								<button type="button" class="close" data-dismiss="modal" aria-label="Fermer"><span aria-hidden="true">&times;</span></button>
-								<h5 class="modal-title" id="culture_modal_label">Créer/éditer une culture</h5>
+								<h5 class="modal-title" id="culture_modal_label">{% blocktrans %}Créer/éditer une culture{% endblocktrans %}</h5>
 							</div>
 							<form id="culture_form" onsubmit="submitModal(event, 'culture')" role="form" action="/create_update.html" method="POST">
 								<div class="modal-body">
 									<input type="hidden" id="culture_id" name="culture_id"></input>
 									<div class="form-group">
-										<label for="culture_nom">Nom de la culture</label>
-										<input type="text" class="form-control" id="culture_nom" name="culture_nom" placeholder="Entrer un nom de culture"></input>
+										<label for="culture_nom">{% blocktrans %}Nom de la culture{% endblocktrans %}</label>
+										<input type="text" class="form-control" id="culture_nom" name="culture_nom" placeholder="{% blocktrans %}Entrer un nom de culture{% endblocktrans %}"></input>
 									</div>
 									<div class="form-group">
-										<label for="culture_surface">Surface</label>
-										<input type="text" class="form-control" id="culture_surface" name="culture_surface" placeholder="Entrer une surface"></input>
+										<label for="culture_surface">{% blocktrans %}Surface{% endblocktrans %}</label>
+										<input type="text" class="form-control" id="culture_surface" name="culture_surface" placeholder="{% blocktrans %}Entrer une surface{% endblocktrans %}"></input>
 									</div>
 									<div class="form-group">
-										<label for="culture_pourcentage">Pourcentage</label>
-										<input type="text" class="form-control" id="culture_pourcentage" name="culture_pourcentage" placeholder="Entrer un pourcentage"></input>
+										<label for="culture_pourcentage">{% blocktrans %}Pourcentage{% endblocktrans %}</label>
+										<input type="text" class="form-control" id="culture_pourcentage" name="culture_pourcentage" placeholder="{% blocktrans %}Entrer un pourcentage{% endblocktrans %}"></input>
 									</div>
 									<div class="form-group">
-										<label for="culture_tolerance">Tolérance</label>
-										<input type="text" class="form-control" id="culture_tolerance" name="culture_tolerance" placeholder="Entrer une tolérance"></input>
+										<label for="culture_tolerance">{% blocktrans %}Tolérance{% endblocktrans %}</label>
+										<input type="text" class="form-control" id="culture_tolerance" name="culture_tolerance" placeholder="{% blocktrans %}Entrer une tolérance{% endblocktrans %}"></input>
 									</div>
 									<div class="checkbox">
-										<label><input type="checkbox" id="culture_obligatoire" name="culture_obligatoire"/>Surface obligatoire</label>
+										<label><input type="checkbox" id="culture_obligatoire" name="culture_obligatoire"/>{% blocktrans %}Surface obligatoire{% endblocktrans %}</label>
 									</div>
 									<div class="form-group">
-										<label for="culture_annees_retour">Années avant retour</label>
-										<input type="text" class="form-control" id="culture_annees_retour" name="culture_annees_retour" placeholder="Entrer un nombre d'années avant retour"></input>
+										<label for="culture_annees_retour">{% blocktrans %}Années avant retour{% endblocktrans %}</label>
+										<input type="text" class="form-control" id="culture_annees_retour" name="culture_annees_retour" placeholder="{% blocktrans %}Entrer un nombre d'années avant retour{% endblocktrans %}"></input>
 									</div>
 									<div class="form-group">
-										<label for="culture_duree_culture">Durée de la culture</label>
-										<input type="text" class="form-control" id="culture_duree_culture" name="culture_duree_culture" placeholder="Entrer un nombre d'années avant retour"></input>
+										<label for="culture_duree_culture">{% blocktrans %}Durée de la culture{% endblocktrans %}</label>
+										<input type="text" class="form-control" id="culture_duree_culture" name="culture_duree_culture" placeholder="{% blocktrans %}Entrer un nombre d'années avant retour{% endblocktrans %}"></input>
 									</div>
-									<div class="row"><h5><strong>&nbsp;Cultures précédentes (CTRL+clic pour sélection multiple)</strong></h5></div>
+									<div class="row"><h5><strong>&nbsp;{% blocktrans %}Cultures précédentes (CTRL+clic pour sélection multiple){% endblocktrans %}</strong></h5></div>
 									<div class="row">
 										<div class="col-lg-4">
 											<div class="form-group">
-												<label for="culture_precedents_interdits">Interdits</label>
+												<label for="culture_precedents_interdits">{% blocktrans %}Interdits{% endblocktrans %}</label>
 												<select id="culture_precedents_interdits" name="culture_precedents_interdits" multiple class="form-control"></select>
 											</div>
 										</div>
 										<div class="col-lg-4">
 											<div class="form-group">
-												<label for="culture_precedents_deconseilles">Déconseillés</label>
+												<label for="culture_precedents_deconseilles">{% blocktrans %}Déconseillés{% endblocktrans %}</label>
 												<select id="culture_precedents_deconseilles" name="culture_precedents_deconseilles" multiple class="form-control"></select>
 											</div>
 										</div>
 										<div class="col-lg-4">
 											<div class="form-group">
-												<label for="culture_precedents_conseilles">Conseillés</label>
+												<label for="culture_precedents_conseilles">{% blocktrans %}Conseillés{% endblocktrans %}</label>
 												<select id="culture_precedents_conseilles" name="culture_precedents_conseilles" multiple class="form-control"></select>
 											</div>
 										</div>
 									</div>
-									<div class="row"><h5><strong>&nbsp;Recommandation de sol (CTRL+clic pour sélection multiple)</strong></h5></div>
+									<div class="row"><h5><strong>&nbsp;{% blocktrans %}Recommandation de sol (CTRL+clic pour sélection multiple){% endblocktrans %}</strong></h5></div>
 									<div class="row">
 										<div class="col-lg-4">
 											<div class="form-group">
-												<label for="culture_sols_interdits">Interdits</label>
-												<select id="culture_sols_interdits" name="culture_sols_interdits" multiple class="form-control"></select>
+												<label for="crop_soils_forbidden">{% blocktrans %}Interdits{% endblocktrans %}</label>
+												<select id="crop_soils_forbidden" name="crop_soils_forbidden" multiple class="form-control"></select>
 											</div>
 										</div>
 										<div class="col-lg-4">
 											<div class="form-group">
-												<label for="culture_sols_deconseilles">Déconseillés</label>
-												<select id="culture_sols_deconseilles" name="culture_sols_deconseilles" multiple class="form-control"></select>
+												<label for="crop_soils_not_reco">{% blocktrans %}Déconseillés{% endblocktrans %}</label>
+												<select id="crop_soils_not_reco" name="crop_soils_not_reco" multiple class="form-control"></select>
 											</div>
 										</div>
 										<div class="col-lg-4">
 											<div class="form-group">
-												<label for="culture_sols_conseilles">Conseillés</label>
-												<select id="culture_sols_conseilles" name="culture_sols_conseilles" multiple class="form-control"></select>
+												<label for="crop_soils_reco">{% blocktrans %}Conseillés{% endblocktrans %}</label>
+												<select id="crop_soils_reco" name="crop_soils_reco" multiple class="form-control"></select>
 											</div>
 										</div>
 									</div>
 								</div>
 								<div class="modal-footer">
-									<button type="button" class="btn btn-default" data-dismiss="modal">Fermer</button>
-									<button type="submit" role="button" class="btn btn-primary">Sauvegarder</button>
+									<button type="button" class="btn btn-default" data-dismiss="modal">{% blocktrans %}Fermer{% endblocktrans %}</button>
+									<button type="submit" role="button" class="btn btn-primary">{% blocktrans %}Sauvegarder{% endblocktrans %}</button>
 								</div>
 							</form>
 						</div>
@@ -583,23 +582,23 @@
 						<div class="modal-content">
 							<div class="modal-header">
 								<button type="button" class="close" data-dismiss="modal" aria-label="Fermer"><span aria-hidden="true">&times;</span></button>
-								<h5 class="modal-title" id="type_sol_modal_label">Créer/éditer un type de sol</h5>
+								<h5 class="modal-title" id="type_sol_modal_label">{% blocktrans %}Créer/éditer un type de sol{% endblocktrans %}</h5>
 							</div>
 							<form id="type_sol_form" onsubmit="submitModal(event, 'type_sol')" role="form" action="/create_update.html" method="POST">
 								<div class="modal-body">
 									<input type="hidden" id="type_sol_id" name="type_sol_id"></input>
 									<div class="form-group">
-										<label for="type_sol_numero">Numéro du type</label>
-										<input type="text" class="form-control" id="type_sol_numero" name="type_sol_numero" placeholder="Entrer un numero pour le sol"></input>
+										<label for="type_sol_numero">{% blocktrans %}Numéro du type{% endblocktrans %}</label>
+										<input type="text" class="form-control" id="type_sol_numero" name="type_sol_numero" placeholder="{% blocktrans %}Entrer un numero pour le sol{% endblocktrans %}"></input>
 									</div>
 									<div class="form-group">
-										<label for="type_sol_nom">Nom du type</label>
-										<input type="text" class="form-control" id="type_sol_nom" name="type_sol_nom" placeholder="Entrer un nom pour le sol"></input>
+										<label for="type_sol_nom">{% blocktrans %}Nom du type{% endblocktrans %}</label>
+										<input type="text" class="form-control" id="type_sol_nom" name="type_sol_nom" placeholder="{% blocktrans %}Entrer un nom pour le sol{% endblocktrans %}"></input>
 									</div>
 								</div>
 								<div class="modal-footer">
-									<button type="button" class="btn btn-default" data-dismiss="modal">Fermer</button>
-									<button type="submit" role="button" class="btn btn-primary">Sauvegarder</button>
+									<button type="button" class="btn btn-default" data-dismiss="modal">{% blocktrans %}Fermer{% endblocktrans %}</button>
+									<button type="submit" role="button" class="btn btn-primary">{% blocktrans %}Sauvegarder{% endblocktrans %}</button>
 								</div>
 							</form>
 						</div>
@@ -611,23 +610,23 @@
 						<div class="modal-content">
 							<div class="modal-header">
 								<button type="button" class="close" data-dismiss="modal" aria-label="Fermer"><span aria-hidden="true">&times;</span></button>
-								<h5 class="modal-title" id="localisation_sol_modal_label">Créer/éditer une localisation de sol</h5>
+								<h5 class="modal-title" id="localisation_sol_modal_label">{% blocktrans %}Créer/éditer une localisation de sol{% endblocktrans %}</h5>
 							</div>
 							<form id="localisation_sol_form" onsubmit="submitModal(event, 'localisation_sol')" role="form" action="/create_update.html" method="POST">
 								<div class="modal-body">
 									<input type="hidden" id="localisation_sol_id" name="localisation_sol_id"></input>
 									<div class="form-group">
-										<label for="localisation_sol_code">Code de la localisation</label>
-										<input type="text" class="form-control" id="localisation_sol_code" name="localisation_sol_code" placeholder="Entrer un code pour la localisation"></input>
+										<label for="localisation_sol_code">{% blocktrans %}Code de la localisation{% endblocktrans %}</label>
+										<input type="text" class="form-control" id="localisation_sol_code" name="localisation_sol_code" placeholder="{% blocktrans %}Entrer un code pour la localisation{% endblocktrans %}"></input>
 									</div>
 									<div class="form-group">
-										<label for="localisation_sol_nom">Nom de la localisation</label>
-										<input type="text" class="form-control" id="localisation_sol_nom" name="localisation_sol_nom" placeholder="Entrer un nom pour la localisation"></input>
+										<label for="localisation_sol_nom">{% blocktrans %}Nom de la localisation{% endblocktrans %}</label>
+										<input type="text" class="form-control" id="localisation_sol_nom" name="localisation_sol_nom" placeholder="{% blocktrans %}Entrer un nom pour la localisation{% endblocktrans %}"></input>
 									</div>
 								</div>
 								<div class="modal-footer">
-									<button type="button" class="btn btn-default" data-dismiss="modal">Fermer</button>
-									<button type="submit" role="button" class="btn btn-primary">Sauvegarder</button>
+									<button type="button" class="btn btn-default" data-dismiss="modal">{% blocktrans %}Fermer{% endblocktrans %}</button>
+									<button type="submit" role="button" class="btn btn-primary">{% blocktrans %}Sauvegarder{% endblocktrans %}</button>
 								</div>
 							</form>
 						</div>
@@ -640,14 +639,14 @@
 						<div class="modal-content">
 							<div class="modal-header">
 								<button type="button" class="close" data-dismiss="modal" aria-label="Fermer"><span aria-hidden="true">&times;</span></button>
-								<h4 class="modal-title" id="solutions_modal_label">Propositions d'assolements</h5>
+								<h4 class="modal-title" id="solutions_modal_label">{% blocktrans %}Propositions d'assolements{% endblocktrans %}</h5>
 							</div>
 							<div class="modal-body">
 								<table id="solutions_table" class="table table-bordered">
 								</table>
 							</div>
 							<div class="modal-footer">
-								<button type="button" class="btn btn-primary" data-dismiss="modal">Fermer</button>
+								<button type="button" class="btn btn-primary" data-dismiss="modal">{% blocktrans %}Fermer{% endblocktrans %}</button>
 							</div>
 						</div>
 					</div>

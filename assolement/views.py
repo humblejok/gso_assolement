@@ -1,6 +1,5 @@
 # Create your views here.
 from django.shortcuts import render
-from assolement.models import TypeSol, LocalisationSol, Culture, Parcelle, Annee
 from django.http.response import HttpResponse
 from seq_common.utils.classes import my_class_import
 from json import dumps, loads
@@ -8,6 +7,8 @@ from django.forms.models import model_to_dict
 import datetime
 from assolement import utils
 import traceback
+from django.contrib.auth.decorators import login_required
+from assolement.models import Crop, SoilKind, SoilPosition, Parcel, Rotation
 
 def clean_post_value(value):
     if isinstance(value, list) and len(value)==1:
@@ -50,15 +51,16 @@ def dict_to_json_compliance(data, data_type=None):
         return data
     return new_data
 
+@login_required
 def index(request):
-    cultures = dumps([dict_to_json_compliance(model_to_dict(culture), Culture) for culture in Culture.objects.all().order_by('nom')])
-    types_sol = dumps([dict_to_json_compliance(model_to_dict(type_sol), TypeSol) for type_sol in TypeSol.objects.all().order_by('numero')])
-    localisations_sol = dumps([dict_to_json_compliance(model_to_dict(localisation_sol), LocalisationSol) for localisation_sol in LocalisationSol.objects.all().order_by('code')])
-    parcelles = dumps([dict_to_json_compliance(model_to_dict(parcelle), Parcelle) for parcelle in Parcelle.objects.all().order_by('nom')])
-    context = {'types_sol': types_sol,
-               'localisations_sol': localisations_sol,
-               'cultures': cultures,
-               'parcelles': parcelles}
+    crops = dumps([dict_to_json_compliance(model_to_dict(crop), Crop) for crop in Crop.objects.filter(user__id=request.user.id).order_by('name')])
+    soil_kinds = dumps([dict_to_json_compliance(model_to_dict(soil_kind), SoilKind) for soil_kind in SoilKind.objects.filter(user__id=request.user.id).order_by('number')])
+    soil_positions = dumps([dict_to_json_compliance(model_to_dict(soil_position), SoilPosition) for soil_position in SoilPosition.objects.filter(user__id=request.user.id).order_by('code')])
+    parcels = dumps([dict_to_json_compliance(model_to_dict(parcel), Parcel) for parcel in Parcel.objects.filter(user__id=request.user.id).order_by('name')])
+    context = {'soils_kinds': soil_kinds,
+               'soil_positions': soil_positions,
+               'crops': crops,
+               'parcel': parcels}
     return render(request, 'index.html', context)
 
 def compute_year(request):
@@ -66,7 +68,7 @@ def compute_year(request):
         json_response = {'success': False, 'message': 'Calcul assolement: Un argument est manquant dans l''appel au serveur.'}
     else:
         year = int(clean_post_value(request.POST['year']))
-        solutions = utils.assolement_computer(year)
+        solutions = utils.assolement_computer(year, request.user)
         json_response = {'success': True, 'solutions': solutions}
     return HttpResponse(dumps(json_response),"json")
 
@@ -78,24 +80,24 @@ def update_history(request):
             history = loads(request.POST['history'])
             for key in history:
                 ids = key.split('-')
-                parcelle = Parcelle.objects.get(id=ids[1])
-                annee = parcelle.historique.filter(annee=ids[2])
-                if annee.exists():
-                    annee = annee[0]
+                parcel = Parcel.objects.get(id=ids[1])
+                rotation = parcel.historique.filter(rotation=ids[2])
+                if rotation.exists():
+                    rotation = rotation[0]
                     if history[key]==-1:
-                        parcelle.historique.remove(annee)
-                        parcelle.save()
-                        annee.delete()
+                        parcel.historique.remove(rotation)
+                        parcel.save()
+                        rotation.delete()
                     else:
-                        annee.culture = Culture.objects.get(id=history[key])
-                elif not annee.exists() and history[key]!=-1:
-                    annee = Annee()
-                    annee.annee = ids[2]
-                    annee.culture = Culture.objects.get(id=history[key])
-                    annee.save()
-                    parcelle.historique.add(annee)
-            parcelles = [dict_to_json_compliance(model_to_dict(parcelle), Parcelle) for parcelle in Parcelle.objects.all().order_by('nom')]
-            json_response = {'success': True, 'updated_values': parcelles}
+                        rotation.crop = Crop.objects.get(id=history[key])
+                elif not rotation.exists() and history[key]!=-1:
+                    rotation = Rotation()
+                    rotation.year = ids[2]
+                    rotation.crop = Crop.objects.get(id=history[key])
+                    rotation.save()
+                    parcel.historique.add(rotation)
+            parcels = [dict_to_json_compliance(model_to_dict(parcel), Parcel) for parcel in Parcel.objects.all().order_by('name')]
+            json_response = {'success': True, 'updated_values': parcels}
         except:
             json_response = {'success': False, 'message': 'Sauvegarde historique: La mise a jour a echoue lors de la sauvergarde en base de donnees.'}
     return HttpResponse(dumps(json_response),"json")
@@ -131,6 +133,7 @@ def create_update(request):
                 update = True
             else:
                 entity = target_class()
+                entity.user = request.user
                 update = False
             for field in target_class._meta.fields:
                 if field.name in request.POST and field.name!='id' and field.__class__.__name__!="BooleanField":
@@ -145,7 +148,7 @@ def create_update(request):
                         setattr(entity, field.name, True)
                     else:
                         setattr(entity, field.name, False)
-            # Pre-sauvegarde pour affecter les champs M2M
+            # Pre-saving for M2M links
             entity.save()
             for field in target_class._meta.many_to_many:
                 getattr(entity, field.name).clear()
